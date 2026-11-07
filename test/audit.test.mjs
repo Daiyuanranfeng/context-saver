@@ -157,3 +157,49 @@ describe('audit: fix 1 — cancellation hygiene', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------- fix 2
+describe('audit: fix 2 — legacy SSE session sweep', () => {
+  test('idle legacy-SSE sessions are swept AND their streams closed', async () => {
+    const portFile = path.join(TMP, `legacy-${Math.random().toString(36).slice(2)}.txt`);
+    const child = spawn(process.execPath, [SELF, '--transport', 'http', '--port', '0', '--port-file', portFile, '--demo', '--no-auth'], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+      env: { ...process.env, CONTEXT_SAVER_LOG: 'silent', CONTEXT_SAVER_SESSION_TTL_MS: '1500' },
+    });
+    try {
+      let port;
+      for (let i = 0; i < 150 && !port; i++) {
+        await sleep(50);
+        try { port = Number(readFileSync(portFile, 'utf8').trim()); } catch { /* not yet */ }
+      }
+      assert.ok(port, 'gateway did not start');
+      const base = `http://127.0.0.1:${port}`;
+
+      const controller = new AbortController();
+      const res = await fetch(`${base}/sse`, { headers: { accept: 'text/event-stream' }, signal: controller.signal });
+      assert.equal(res.status, 200);
+      let endpoint = null;
+      const parser = new CS.SseParser(({ event, data }) => { if (event === 'endpoint') endpoint = data; });
+      const reader = Readable.fromWeb(res.body);
+      reader.on('data', (c) => parser.push(c));
+      const deadline = Date.now() + 4_000;
+      while (!endpoint && Date.now() < deadline) await sleep(25);
+      assert.ok(endpoint, 'no endpoint event');
+
+      const streamEnded = new Promise((resolve) => { reader.once('end', resolve); reader.once('error', resolve); });
+      const ended = await Promise.race([streamEnded.then(() => true), sleep(8_000).then(() => false)]);
+      assert.ok(ended, 'the server must close the idle legacy SSE stream after the session TTL');
+
+      // and the session must really be gone
+      const post = await fetch(`${base}${endpoint}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'ping' }),
+      }).catch(() => null);
+      assert.ok(!post || post.status === 404, 'swept session must reject further messages');
+      controller.abort();
+    } finally {
+      child.kill('SIGKILL');
+    }
+  });
+});

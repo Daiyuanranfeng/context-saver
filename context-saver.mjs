@@ -2219,11 +2219,13 @@ function createGatewayHttpServer({ engine, manager, auth = null, allowedOrigins 
     try { res.write(`event: endpoint\ndata: /messages?sessionId=${session.id}\n\n`); } catch { return; }
     const keep = setInterval(() => writeSseComment(res, 'keepalive'), keepAliveMs);
     session.legacyRes = res;
+    session.getSseStream = res; // unified cleanup: sweeper + DELETE close this too
     session.sink = (obj) => writeSseEvent(res, obj);
     const close = () => {
       clearInterval(keep);
       session.sink = null;
       session.legacyRes = null;
+      session.getSseStream = null;
       engine.deleteSession(session.id);
       try { res.end(); } catch { /* ignore */ }
     };
