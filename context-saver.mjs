@@ -693,11 +693,12 @@ class SseParser {
     this.lastId = null;
   }
   push(chunk) {
-    this.buf += chunk.toString('utf8').replace(/\r\n/g, '\n');
-    let idx;
-    while ((idx = this.buf.indexOf('\n\n')) !== -1) {
-      const raw = this.buf.slice(0, idx);
-      this.buf = this.buf.slice(idx + 2);
+    this.buf += chunk.toString('utf8');
+    // SSE blocks end with a blank line: \n\n or \r\n\r\n (or \r\r for old Macs)
+    let m;
+    while ((m = this.buf.match(/\r\n\r\n|\n\n|\r\r/)) !== null) {
+      const raw = this.buf.slice(0, m.index);
+      this.buf = this.buf.slice(m.index + m[0].length);
       this._dispatch(raw);
     }
     if (this.buf.length > 1 * 1024 * 1024) this.buf = ''; // pathological server; drop
@@ -705,7 +706,8 @@ class SseParser {
   _dispatch(raw) {
     let event = 'message';
     const data = [];
-    for (const line of raw.split('\n')) {
+    for (let line of raw.split('\n')) {
+      if (line.endsWith('\r')) line = line.slice(0, -1);
       if (line.startsWith(':')) continue;
       const colon = line.indexOf(':');
       const field = colon === -1 ? line : line.slice(0, colon);
@@ -977,6 +979,7 @@ class DownstreamManager {
     if (!spec) return 'none';
     return createHash('sha256').update(JSON.stringify({
       type: spec.type, command: spec.command, args: spec.args, url: spec.url, cwd: spec.cwd,
+      env: spec.env, headers: spec.headers,
     })).digest('hex').slice(0, 16);
   }
 
@@ -1819,6 +1822,14 @@ async function hCall(engine, session, args) {
     }
   }
   if (!server) {
+    // The server may be configured but unreachable (empty catalog) — try anyway so
+    // the user sees the real connection error instead of "unknown tool".
+    const parts = toolId.split('__');
+    const fallbackServer = parts.length >= 2 ? engine.manager.servers[parts[0]] : null;
+    const fallbackEntry = fallbackServer ? catalog.get(parts[0]) : null;
+    if (fallbackServer && (!fallbackEntry || fallbackEntry.tools.length === 0)) {
+      return engine._callDownstream(session, parts[0], parts.slice(1).join('__'), callArgs);
+    }
     const hint = suggestIds(toolId, catalog).join(', ');
     throw invalidParams(`unknown tool "${toolId}"${hint ? ` — did you mean: ${hint}` : ''}`);
   }
@@ -2076,6 +2087,10 @@ function createGatewayHttpServer({ engine, manager, auth = null, allowedOrigins 
       const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
       if (contentType !== 'application/json') {
         return sendJson(res, 415, rpcError(null, ErrorCode.SERVER_ERROR, 'Unsupported Media Type: Content-Type must be application/json'));
+      }
+      const declaredLength = Number(req.headers['content-length']);
+      if (Number.isFinite(declaredLength) && declaredLength > HTTP_BODY_LIMIT) {
+        return sendJson(res, 413, rpcError(null, ErrorCode.SERVER_ERROR, `Payload Too Large: Request body must not exceed ${HTTP_BODY_LIMIT} bytes`));
       }
       const { err: bodyErr, body } = await readBody(req, HTTP_BODY_LIMIT);
       if (bodyErr === 'too-large') {
@@ -3143,6 +3158,8 @@ class SimpleMcpClient {
           this.pending.delete(msg.id);
           clearTimeout(entry.timer);
           entry.resolve(msg);
+        } else if (this.onUnhandledMessage) {
+          this.onUnhandledMessage(msg);
         }
       }
     });
