@@ -2381,6 +2381,12 @@ class OAuthProvider {
   _rateLimited(req) {
     const ip = req.socket.remoteAddress || 'unknown';
     const now = Date.now();
+    // Bound the map: an internet-exposed token endpoint sees unbounded unique
+    // source addresses, and each entry would otherwise live for its 15-min window.
+    if (this._rate.size >= 4_096) {
+      log.warn('oauth', 'rate-limit map exceeded 4096 entries; resetting window counters');
+      this._rate.clear();
+    }
     const win = this._rate.get(ip);
     if (!win || now - win.windowStart > 15 * 60_000) {
       this._rate.set(ip, { count: 1, windowStart: now });

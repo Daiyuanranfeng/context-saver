@@ -203,3 +203,13 @@ describe('audit: fix 2 — legacy SSE session sweep', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------- fix 3
+describe('audit: fix 3 — rate limiter memory bound', () => {
+  test('the token-endpoint rate limiter does not grow without bound', () => {
+    const provider = new CS.OAuthProvider({});
+    const fakeReq = (ip) => ({ socket: { remoteAddress: ip } });
+    for (let i = 0; i < 20_000; i++) provider._rateLimited(fakeReq(`10.${i % 256}.${Math.floor(i / 256) % 256}.${(i % 254) + 1}`));
+    assert.ok(provider._rate.size <= 4_096, `rate-limit map holds ${provider._rate.size} entries — unbounded growth`);
+  });
+});
