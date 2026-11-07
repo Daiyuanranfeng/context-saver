@@ -213,3 +213,25 @@ describe('audit: fix 3 — rate limiter memory bound', () => {
     assert.ok(provider._rate.size <= 4_096, `rate-limit map holds ${provider._rate.size} entries — unbounded growth`);
   });
 });
+
+// ---------------------------------------------------------------- fix 4
+describe('audit: fix 4 — demo config cleanup', () => {
+  test('demo config files do not accumulate in tmpdir after gateway exit', async () => {
+    const listDemoConfigs = () => {
+      try {
+        return readdirSync(tmpdir()).filter((f) => f.startsWith('context-saver-demo-') && f.endsWith('.json'));
+      } catch {
+        return [];
+      }
+    };
+    const before = listDemoConfigs().length;
+    const client = CS.SimpleMcpClient.spawn(['--demo']);
+    await client.initialize('audit-litter');
+    await call(client, 'cs_discover', {});
+    client.child.kill('SIGTERM');
+    await new Promise((resolve) => client.child.on('exit', resolve));
+    await sleep(300);
+    const after = listDemoConfigs().length;
+    assert.equal(after, before, `demo config files leaked in ${tmpdir()} (${before} -> ${after})`);
+  });
+});

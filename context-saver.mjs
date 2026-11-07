@@ -3140,6 +3140,11 @@ function buildDemoConfigFile() {
   };
   const file = path.join(tmpdir(), `context-saver-demo-${process.pid}-${Date.now()}.json`);
   writeFileSync(file, JSON.stringify(config, null, 2), 'utf8');
+  // Throwaway configs must not litter the tmpdir (CI runners, scheduled --doctor).
+  // 'exit' fires on normal exits and on process.exit() from our signal handlers.
+  process.on('exit', () => {
+    try { rmSync(file, { force: true }); } catch { /* best effort */ }
+  });
   return file;
 }
 
