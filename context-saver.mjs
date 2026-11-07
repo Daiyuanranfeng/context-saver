@@ -2345,6 +2345,18 @@ function errorPageHtml(title, detail) {
 </head><body><div class="card"><h1>${escapeHtml(title)}</h1><p>${escapeHtml(detail)}</p></div></body></html>`;
 }
 
+function secretEquals(a, b) {
+  const ab = Buffer.from(String(a ?? ''));
+  const bb = Buffer.from(String(b ?? ''));
+  if (ab.length !== 0 && bb.length === 0) return false; // registered secret must not be empty
+  if (ab.length !== bb.length) return false;
+  try {
+    return timingSafeEqual(ab, bb);
+  } catch {
+    return false;
+  }
+}
+
 class OAuthProvider {
   constructor({ tokenTtlMs, refreshTokenTtlMs } = {}) {
     const settings = SETTINGS();
@@ -2575,7 +2587,7 @@ class OAuthProvider {
       if (!entry || entry.consumed || Date.now() >= entry.expiresAt) return invalidGrant('code is unknown, consumed or expired');
       const client = this.clients.get(form.client_id);
       if (!client || form.client_id !== entry.clientId) return invalidGrant('client_id does not match the authorization request');
-      if (client.authMethod === 'client_secret_post' && form.client_secret !== client.secret) {
+      if (client.authMethod === 'client_secret_post' && !secretEquals(form.client_secret, client.secret)) {
         return sendJson(res, 401, { error: 'invalid_client' }, corsHeaders);
       }
       if (form.redirect_uri !== entry.redirectUri) return invalidGrant('redirect_uri does not match the authorization request');
@@ -2595,7 +2607,7 @@ class OAuthProvider {
       if (!entry || Date.now() >= entry.expiresAt) return invalidGrant('refresh token is unknown or expired');
       const client = this.clients.get(form.client_id);
       if (!client || form.client_id !== entry.clientId) return invalidGrant('client_id does not match the token');
-      if (client.authMethod === 'client_secret_post' && form.client_secret !== client.secret) {
+      if (client.authMethod === 'client_secret_post' && !secretEquals(form.client_secret, client.secret)) {
         return sendJson(res, 401, { error: 'invalid_client' }, corsHeaders);
       }
       this.refreshTokens.delete(form.refresh_token); // rotation
