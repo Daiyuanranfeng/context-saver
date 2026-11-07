@@ -1,7 +1,7 @@
 {
   "name": "context-saver-mcp",
   "version": "1.0.0",
-  "description": "Context-Saver — the token-saving MCP gateway. One connection, every tool, ~90% less context. Lazy-loads downstream MCP server schemas only when a turn needs them.",
+  "description": "Context-Saver \u2014 the token-saving MCP gateway. One connection, every tool, ~90% less context. Lazy-loads downstream MCP server schemas only when a turn needs them.",
   "type": "module",
   "bin": {
     "context-saver": "./context-saver.mjs"
@@ -24,7 +24,7 @@
     "demo": "node context-saver.mjs --demo",
     "client": "node context-saver.mjs --demo --client",
     "doctor": "node context-saver.mjs --doctor",
-    "test": "node --test test/unit.test.mjs test/gateway.test.mjs test/http-oauth.test.mjs",
+    "test": "node --test test/unit.test.mjs test/gateway.test.mjs test/http-oauth.test.mjs test/audit.test.mjs",
     "lint": "eslint .",
     "preflight": "node context-saver.mjs --doctor && npm test"
   },

@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 440" font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" role="img" aria-label="Context-Saver architecture: one gateway between your AI client and many MCP servers">
+  <title>Context-Saver architecture</title>
+  <defs>
+    <linearGradient id="logo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3fb950"/>
+      <stop offset="1" stop-color="#58a6ff"/>
+    </linearGradient>
+    <linearGradient id="gw" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1c2333"/>
+      <stop offset="1" stop-color="#131a28"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b949e"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3fb950"/>
+    </marker>
+  </defs>
+
+  <rect width="980" height="440" fill="#0d1117"/>
+  <text x="490" y="34" text-anchor="middle" fill="#e6edf3" font-size="19" font-weight="700">Context-Saver — the MCP gateway</text>
+  <text x="490" y="54" text-anchor="middle" fill="#8b949e" font-size="12">one connection · every tool · schemas only when a turn needs them</text>
+
+  <!-- client -->
+  <rect x="22" y="120" width="196" height="180" rx="12" fill="#161b22" stroke="#30363d"/>
+  <text x="120" y="148" text-anchor="middle" fill="#e6edf3" font-size="14" font-weight="700">Your AI client</text>
+  <g fill="#8b949e" font-size="12" text-anchor="middle">
+    <text x="120" y="188">Claude Code</text>
+    <text x="120" y="212">Cursor</text>
+    <text x="120" y="236">Claude Desktop</text>
+    <text x="120" y="260">any MCP client</text>
+  </g>
+  <rect x="52" y="272" width="136" height="16" rx="8" fill="#21262d"/>
+  <text x="120" y="284" text-anchor="middle" fill="#79c0ff" font-size="10" font-family="ui-monospace,Menlo,monospace">stdio · HTTP+SSE · OAuth</text>
+
+  <!-- gateway -->
+  <rect x="286" y="92" width="408" height="256" rx="14" fill="url(#gw)" stroke="#2ea043" stroke-width="1.6"/>
+  <rect x="466" y="78" width="48" height="30" rx="8" fill="url(#logo)"/>
+  <text x="490" y="140" text-anchor="middle" fill="#e6edf3" font-size="15" font-weight="700">Context-Saver</text>
+  <text x="490" y="158" text-anchor="middle" fill="#8b949e" font-size="11">single MCP server you configure</text>
+
+  <g>
+    <rect x="304" y="172" width="180" height="70" rx="8" fill="#161b22" stroke="#30363d"/>
+    <text x="316" y="192" fill="#79c0ff" font-size="11" font-weight="700">6 meta-tools · ≈680 tok</text>
+    <text x="316" y="208" fill="#8b949e" font-size="10">cs_discover · cs_plan · cs_load</text>
+    <text x="316" y="222" fill="#8b949e" font-size="10">cs_unload · cs_call · cs_status</text>
+
+    <rect x="496" y="172" width="180" height="70" rx="8" fill="#161b22" stroke="#30363d"/>
+    <text x="508" y="192" fill="#d2a8ff" font-size="11" font-weight="700">Prompt planner</text>
+    <text x="508" y="208" fill="#8b949e" font-size="10">scores the task text against</text>
+    <text x="508" y="222" fill="#8b949e" font-size="10">the catalog → minimal toolset</text>
+
+    <rect x="304" y="254" width="180" height="70" rx="8" fill="#161b22" stroke="#30363d"/>
+    <text x="316" y="274" fill="#3fb950" font-size="11" font-weight="700">Lazy loader + router</text>
+    <text x="316" y="290" fill="#8b949e" font-size="10">connect on demand · restart</text>
+    <text x="316" y="304" fill="#8b949e" font-size="10">on crash · idle reaping · cache</text>
+
+    <rect x="496" y="254" width="180" height="70" rx="8" fill="#161b22" stroke="#30363d"/>
+    <text x="508" y="274" fill="#f0883e" font-size="11" font-weight="700">OAuth 2.1 + accounting</text>
+    <text x="508" y="290" fill="#8b949e" font-size="10">PKCE login pop-up · tokens</text>
+    <text x="508" y="304" fill="#8b949e" font-size="10">live token-savings report</text>
+  </g>
+
+  <!-- downstreams -->
+  <text x="846" y="118" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="700">Downstream servers</text>
+  <text x="846" y="134" text-anchor="middle" fill="#8b949e" font-size="10">spawn / HTTP — only when needed</text>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="11" text-anchor="middle">
+    <rect x="742" y="148" width="208" height="36" rx="8" fill="#161b22" stroke="#30363d"/><text x="846" y="171" fill="#e6edf3">@modelcontextprotocol/server-filesystem</text>
+    <rect x="742" y="194" width="208" height="36" rx="8" fill="#161b22" stroke="#30363d"/><text x="846" y="217" fill="#e6edf3">github · postgres · puppeteer</text>
+    <rect x="742" y="240" width="208" height="36" rx="8" fill="#161b22" stroke="#30363d"/><text x="846" y="263" fill="#e6edf3">scrapling · browser-use · …</text>
+    <rect x="742" y="286" width="208" height="36" rx="8" fill="#161b22" stroke="#30363d" stroke-dasharray="4 3"/><text x="846" y="309" fill="#8b949e">+ dozens more — zero extra setup</text>
+  </g>
+
+  <!-- arrows -->
+  <line x1="218" y1="190" x2="286" y2="190" stroke="#8b949e" stroke-width="1.6" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+  <text x="252" y="180" text-anchor="middle" fill="#8b949e" font-size="9">1 connection</text>
+  <text x="252" y="204" text-anchor="middle" fill="#3fb950" font-size="9">≈680 tok, fixed</text>
+
+  <g stroke="#3fb950" stroke-width="1.4" stroke-dasharray="5 4">
+    <line x1="694" y1="166" x2="742" y2="166"/>
+    <line x1="694" y1="212" x2="742" y2="212"/>
+    <line x1="694" y1="258" x2="742" y2="258"/>
+    <line x1="694" y1="304" x2="742" y2="304"/>
+  </g>
+  <text x="718" y="152" text-anchor="middle" fill="#3fb950" font-size="9">lazy</text>
+
+  <!-- savings badge -->
+  <rect x="330" y="376" width="320" height="42" rx="21" fill="#12261e" stroke="#2ea043"/>
+  <text x="490" y="402" text-anchor="middle" fill="#3fb950" font-size="14" font-weight="700">same tools — ~90% less context</text>
+</svg>

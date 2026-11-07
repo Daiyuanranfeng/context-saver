@@ -3280,7 +3280,12 @@ async function runReplClient(args = {}) {
   console.log(paint('dim', 'commands: /discover [q] · /plan <task> · /load <ids…> · /unload · /call <id> <json> · /tools · /status · /quit'));
   console.log(paint('dim', 'plain text is treated as a task for /plan\n'));
 
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: paint('cyan', 'cs> '), terminal: true });
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: paint('cyan', 'cs> '),
+    terminal: process.stdout.isTTY === true, // clean output when piped/captured
+  });
   rl.prompt();
 
   const call = async (method, params) => {
@@ -3288,8 +3293,10 @@ async function runReplClient(args = {}) {
     printToolResult(res);
   };
 
-  rl.on('line', async (line) => {
-    const input = line.trim();
+  // Serialize command handling: pasted input would otherwise let a later
+  // /quit exit before earlier async commands print their results.
+  let commandChain = Promise.resolve();
+  const handleLine = async (input) => {
     try {
       if (!input) { /* no-op */ }
       else if (input === '/quit' || input === '/exit') { rl.close(); return; }
@@ -3322,7 +3329,6 @@ async function runReplClient(args = {}) {
         let parsedArgs = {};
         try { parsedArgs = JSON.parse(rawArgs); } catch {
           console.log(paint('yellow', `could not parse arguments as JSON: ${rawArgs}`));
-          rl.prompt();
           return;
         }
         await call('tools/call', { name: 'cs_call', arguments: { tool, args: parsedArgs } });
@@ -3354,6 +3360,10 @@ async function runReplClient(args = {}) {
       console.log(paint('red', `error: ${err.message}`));
     }
     rl.prompt();
+  };
+  rl.on('line', (line) => {
+    const input = line.trim();
+    commandChain = commandChain.then(() => handleLine(input)).catch(() => {});
   }).on('close', () => {
     client.close();
     console.log(paint('dim', '\nbye — context saved.'));
