@@ -1,0 +1,57 @@
+# Context-Saver (llms.txt)
+
+> One MCP connection. Every tool. ~90% less context.
+
+Context-Saver is a Model Context Protocol gateway (aggregator/multiplexer).
+You connect ONE MCP server to your client; it fronts any number of downstream
+MCP servers and lazy-loads their tool schemas only when a turn needs them.
+
+## How an agent should use it
+
+1. `cs_discover` — search the aggregated catalog (cheap, no schemas).
+2. `cs_plan` — pass the user's task; get the minimal recommended toolset.
+3. `cs_load` — load exactly those tools; they then appear as normal MCP tools
+   (the client receives `notifications/tools/list_changed`). Their schemas are
+   also echoed in the `cs_load` result.
+4. Call loaded tools directly, or use `cs_call` (auto-loads, no schema needed).
+5. `cs_unload` when done; `cs_status` for accounting.
+
+Never guess downstream tool names — always discover or plan first.
+
+## Meta-tools (fixed cost, ~1.1k tokens)
+
+| Tool | Input | Purpose |
+|---|---|---|
+| cs_discover | `{query?, refresh?}` | list/filter catalog |
+| cs_plan | `{task}` | score task → toolset |
+| cs_load | `{tools: string[]}` | load schemas (globs OK: `github:*`) |
+| cs_unload | `{tools?: string[]}` | unload (all if omitted) |
+| cs_status | `{verbose?}` | servers, sessions, token savings |
+| cs_call | `{tool, args?}` | direct call with auto-load |
+
+## CLI
+
+```
+node context-saver.mjs                       # stdio gateway (default)
+  --config <file>        config path (default ~/.context-saver/config.json)
+  --transport http       Streamable HTTP server (also serves legacy /sse)
+  --port N --host H      bind address (default 127.0.0.1:3270)
+  --auth / --no-auth     OAuth 2.1 gate for HTTP mode (default: on)
+  --demo                 3 built-in demo downstream servers, zero setup
+  --client               interactive REPL client (great with --demo)
+  --doctor               self-diagnostic, exit 0 = healthy
+  --version / --help
+```
+
+## Config (accepts Claude-style `mcpServers` or `servers`)
+
+```json
+{
+  "servers": {
+    "filesystem": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"] },
+    "github":     { "url": "https://api.githubcopilot.com/mcp/", "headers": { "Authorization": "Bearer ${GITHUB_TOKEN}" } }
+  }
+}
+```
+
+Zero dependencies. Node ≥ 18.17. MIT license.

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/registry/main/schema/draft-2025-07-05/server.schema.json",
+  "name": "npm/context-saver-mcp",
+  "title": "Context-Saver — MCP Gateway & Multiplexer",
+  "description": "Connect once, load tools on demand. A single-file, zero-dependency MCP gateway that aggregates dozens of downstream MCP servers while cutting context-window usage by ~90% through lazy tool-schema loading.",
+  "version": "1.0.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "context-saver-mcp",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ],
+  "tools": [
+    {
+      "name": "cs_discover",
+      "description": "Search the aggregated tool catalog across all configured downstream MCP servers without loading any schemas."
+    },
+    {
+      "name": "cs_plan",
+      "description": "Inspect a task description and score it against the catalog to recommend the minimal toolset for that turn."
+    },
+    {
+      "name": "cs_load",
+      "description": "Lazy-load specific downstream tools (full JSON schemas) into the session and announce them via tools/list_changed."
+    },
+    {
+      "name": "cs_unload",
+      "description": "Unload previously loaded tools to reclaim context."
+    },
+    {
+      "name": "cs_status",
+      "description": "Show downstream servers, connections, loaded tools and live token-savings accounting."
+    },
+    {
+      "name": "cs_call",
+      "description": "Invoke any catalog tool directly (auto-loads on demand) without loading its schema first."
+    }
+  ]
+}

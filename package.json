@@ -1,0 +1,64 @@
+{
+  "name": "context-saver-mcp",
+  "version": "1.0.0",
+  "description": "Context-Saver — the token-saving MCP gateway. One connection, every tool, ~90% less context. Lazy-loads downstream MCP server schemas only when a turn needs them.",
+  "type": "module",
+  "bin": {
+    "context-saver": "./context-saver.mjs"
+  },
+  "main": "./context-saver.mjs",
+  "exports": {
+    ".": "./context-saver.mjs"
+  },
+  "files": [
+    "context-saver.mjs",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "start": "node context-saver.mjs",
+    "demo": "node context-saver.mjs --demo",
+    "client": "node context-saver.mjs --demo --client",
+    "doctor": "node context-saver.mjs --doctor",
+    "test": "node --test test/unit.test.mjs test/gateway.test.mjs test/http-oauth.test.mjs",
+    "lint": "eslint .",
+    "preflight": "node context-saver.mjs --doctor && npm test"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "gateway",
+    "router",
+    "multiplexer",
+    "aggregator",
+    "proxy",
+    "context-window",
+    "token-saving",
+    "lazy-loading",
+    "claude-code",
+    "cursor",
+    "claude-desktop",
+    "oauth",
+    "sse",
+    "streamable-http"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/context-saver/context-saver.git"
+  },
+  "bugs": {
+    "url": "https://github.com/context-saver/context-saver/issues"
+  },
+  "homepage": "https://github.com/context-saver/context-saver#readme",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "eslint": "^9.20.0"
+  }
+}
