@@ -136,3 +136,24 @@ describe('audit: defenses verified', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------- fix 1
+describe('audit: fix 1 — cancellation hygiene', () => {
+  test('a late cancellation must not suppress a future request reusing the id', async () => {
+    const client = CS.SimpleMcpClient.spawn(['--demo']);
+    try {
+      await client.initialize('audit-cancel');
+      const rawId = 'reused-id-7';
+      const first = await rawExchange(client, JSON.stringify({ jsonrpc: '2.0', id: rawId, method: 'ping' }));
+      assert.deepEqual(first.result, {});
+      // the cancellation arrives AFTER the reply was already sent (late cancel)
+      client.child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: rawId } })}\n`);
+      await sleep(150);
+      // a later request that reuses the same id must still receive its reply
+      const second = await rawExchange(client, JSON.stringify({ jsonrpc: '2.0', id: rawId, method: 'tools/list' }), 4_000).catch(() => null);
+      assert.ok(second && second.result, `late cancellation suppressed the reply for a reused id: ${JSON.stringify(second)}`);
+    } finally {
+      client.close();
+    }
+  });
+});

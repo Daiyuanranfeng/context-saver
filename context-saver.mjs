@@ -1400,6 +1400,11 @@ class GatewayEngine {
 
   async handleRequest(msg, session) {
     session.touch();
+    // A cancellation can only legitimately target a request that is already in
+    // flight. Clearing any stale entry here prevents a LATE cancellation (one that
+    // arrived after the previous reply was written) from suppressing the reply of
+    // a future request that reuses the same id.
+    session.cancelled.delete(msg.id);
     let reply;
     try {
       switch (msg.method) {
@@ -1432,7 +1437,13 @@ class GatewayEngine {
       log.info('session', `client ${session.clientInfo?.name || session.id} confirmed initialization`);
     } else if (msg.method === 'notifications/cancelled') {
       const rid = msg.params?.requestId;
-      if (rid !== undefined) session.cancelled.add(rid);
+      if (rid !== undefined) {
+        if (session.cancelled.size > 1_000) {
+          log.warn('session', 'cancellation set exceeded 1000 entries; clearing');
+          session.cancelled.clear();
+        }
+        session.cancelled.add(rid);
+      }
       log.debug('session', `client cancelled request ${JSON.stringify(rid)}`);
     }
     // other notifications are informational; the spec says ignore unknown ones
