@@ -18,7 +18,7 @@ MCP servers and lazy-loads their tool schemas only when a turn needs them.
 
 Never guess downstream tool names — always discover or plan first.
 
-## Meta-tools (fixed cost, ~1.1k tokens)
+## Meta-tools (fixed cost, ~680 tokens)
 
 | Tool | Input | Purpose |
 |---|---|---|

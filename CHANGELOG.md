@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   idle reaping, disk-cached tool catalog (zero-cost restarts).
 - Prompt planner (`cs_plan`): heuristic scoring maps a task to the minimal toolset.
 - Token accounting: per-session baseline vs. loaded cost with live savings report.
-- Built-in demo fleet (3 servers / 13 tools), interactive REPL client (`--client`),
+- Built-in demo fleet (3 servers / 16 tools), interactive REPL client (`--client`),
   self-diagnostic mode (`--doctor`).
 - CI: 3-OS × 4-Node test matrix, ESLint, package-gate (asserts the npm tarball is
   exactly one file), multi-platform release artifacts with SHA256SUMS.

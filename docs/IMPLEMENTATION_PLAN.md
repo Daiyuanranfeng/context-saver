@@ -87,7 +87,7 @@ loaded tool definitions; savings = baseline − session cost. Reported live by
 | Gateway replaces N connections | `gateway: fixed meta-tool footprint`, `gateway: measured token savings` |
 | Lazy loading | `gateway: cs_load exposes tools + list_changed`, `gateway: schemas only after load`, `gateway: cs_call auto-load` |
 | Prompt inspection | `unit: planner ranks relevant tools`, `gateway: cs_plan end-to-end` |
-| Multi-server multiplexing | `gateway: routes calls to owning server`, `gateway: 3 servers, 13 tools` |
+| Multi-server multiplexing | `gateway: routes calls to owning server`, `gateway: 3 servers, 16 tools` |
 | Robustness | downstream error/crash/timeout/restart, malformed frames, CRLF, concurrent calls |
 | stdio transport | handshake, pagination, parse-error handling |
 | Streamable HTTP | session lifecycle, 406/415/404 matrix, SSE responses, DELETE, keepalive |
