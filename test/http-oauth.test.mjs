@@ -2,7 +2,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, readFileSync , realpathSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -262,7 +262,7 @@ describe('streamable HTTP transport (no auth)', () => {
 describe('OAuth 2.1 authorization server', () => {
   let gw_;
   let clientId;
-  let redirectUri = 'http://127.0.0.1:8923/callback';
+  const redirectUri = 'http://127.0.0.1:8923/callback';
   let accessToken;
   let refreshToken;
   let sessionId;

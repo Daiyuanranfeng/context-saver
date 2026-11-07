@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable no-console */
 // ---------------------------------------------------------------------------
 //  Context-Saver — the token-saving MCP gateway / multiplexer.
 //
@@ -39,7 +38,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
 import readline from 'node:readline';
 
@@ -472,7 +471,7 @@ class SessionExpired extends Error {
 }
 
 /** Normalize a tools/call response from a downstream server. */
-function normalizeCallResult(result, serverName, toolName) {
+function normalizeCallResult(result) {
   const r = (result !== null && typeof result === 'object') ? result : {};
   const out = {};
   if (Array.isArray(r.content)) {
@@ -545,7 +544,7 @@ class BaseDownstream {
     if (res.error) {
       throw new DownstreamRpcError(res.error.code ?? ErrorCode.INTERNAL_ERROR, res.error.message ?? 'downstream tool error', res.error.data);
     }
-    return normalizeCallResult(res.result, this.name, toolName);
+    return normalizeCallResult(res.result);
   }
 
   _handleDownstreamNotification(method) {
@@ -1080,8 +1079,7 @@ class DownstreamManager {
 
   _onDownstreamEvent(name, event) {
     if (event?.kind === 'catalog-refresh') {
-      const entry = this.catalog.get(name);
-      this.catalog.set(name, { tools: event.tools, fetchedAt: Date.now(), live: true });
+      this.catalog.set(name, { tools: event.tools, fetchedAt: Date.now(), live: true, fingerprint: this._fingerprint(name) });
       this.cache.save(this.catalog);
     }
   }
@@ -2479,7 +2477,7 @@ class OAuthProvider {
     }, corsHeaders);
   }
 
-  _validateAuthorize(params, base) {
+  _validateAuthorize(params) {
     const clientId = params.client_id;
     const client = clientId ? this.clients.get(clientId) : null;
     if (!client) return { error: 'unknown_client', detail: `Unknown client_id ${clientId || '(missing)'}` };
@@ -2500,7 +2498,7 @@ class OAuthProvider {
   async _handleAuthorize(req, res, u, base) {
     if (req.method === 'GET') {
       const params = Object.fromEntries(u.searchParams.entries());
-      const v = this._validateAuthorize(params, base);
+      const v = this._validateAuthorize(params);
       if (v.error === 'unknown_client' || v.error === 'bad_redirect') {
         res.writeHead(400, { 'content-type': 'text/html; charset=utf-8' });
         res.end(errorPageHtml('Authorization error', v.detail));
@@ -2536,7 +2534,7 @@ class OAuthProvider {
       const v = decodeURIComponent(pair.slice(idx + 1).replace(/\+/g, ' '));
       params[k] = v;
     }
-    const v = this._validateAuthorize(params, base);
+    const v = this._validateAuthorize(params);
     const target = v.redirectUri ? new URL(v.redirectUri) : null;
     if (!target) {
       res.writeHead(400, { 'content-type': 'text/html; charset=utf-8' });

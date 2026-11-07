@@ -1,0 +1,35 @@
+name: Close stale needs-info issues
+
+# Label-scoped staleness: only issues waiting on requested information are
+# ever touched. A reply from the reporter removes the wait — nothing else
+# (no activity-based staleness on normal issues or PRs).
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-issue-stale: 14
+          days-before-issue-close: 7
+          only-issue-labels: "needs-info"
+          stale-issue-label: "needs-info-stale"
+          stale-issue-message: >
+            This issue is waiting on the requested information and will be
+            closed in 7 days if it doesn't arrive. Replying with the details
+            re-triages it automatically.
+          close-issue-message: >
+            Closed for lack of requested information — feel free to reopen
+            (or open a fresh issue) with the details included.
+          exempt-issue-labels: "pinned"
+          days-before-pr-stale: -1
+          days-before-pr-close: -1

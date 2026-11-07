@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-fund --no-audit
+      - name: node --check (syntax gate)
+        run: node --check context-saver.mjs
+      - name: ESLint
+        run: npm run lint
+
+  test:
+    name: Test (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [18, 20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Unit + E2E + HTTP/OAuth + audit suites
+        run: npm test
+      - name: End-to-end doctor smoke test
+        run: node context-saver.mjs --doctor
+
+  package-gate:
+    name: Package gate (single-file claim, npm install, doctor)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Version consistency (package.json = server.json = CHANGELOG)
+        shell: bash
+        run: |
+          node --input-type=commonjs -e '
+            const fs = require("fs");
+            const pkg = require("./package.json");
+            const reg = require("./server.json");
+            const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
+            const v = pkg.version;
+            if (reg.version !== v) throw new Error("server.json version mismatch: " + reg.version + " != " + v);
+            if (reg.packages[0].version !== v) throw new Error("server.json package version mismatch");
+            if (!changelog.includes("[" + v + "]")) throw new Error("CHANGELOG.md is missing an entry for " + v);
+            console.log("versions consistent at " + v);
+          '
+      - name: npm pack
+        run: npm pack
+      - name: Assert the tarball ships exactly one implementation file
+        shell: bash
+        run: |
+          ls -1 *.tgz
+          MJS_FILES="$(tar -tzf context-saver-mcp-*.tgz | grep '\.mjs$' || true)"
+          echo "$MJS_FILES"
+          test "$(echo "$MJS_FILES" | wc -l)" = 1
+          test "$MJS_FILES" = "package/context-saver.mjs"
+          echo "single-file claim verified"
+      - name: Install the tarball into a clean project and smoke-test it
+        shell: bash
+        run: |
+          mkdir -p ../smoke && cd ../smoke
+          npm init -y >/dev/null 2>&1
+          npm install "$GITHUB_WORKSPACE"/context-saver-mcp-*.tgz --no-fund --no-audit
+          node node_modules/context-saver-mcp/context-saver.mjs --version
+          node node_modules/context-saver-mcp/context-saver.mjs --doctor

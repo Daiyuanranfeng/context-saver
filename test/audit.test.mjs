@@ -1,10 +1,10 @@
 // Audit probes: adversarial tests written AFTER implementation, hunting for
 // bugs that bite real users. Each probe documents a finding; the ones that
 // fail are reproduced here before being fixed (test-first).
-import { test, describe, before, after } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

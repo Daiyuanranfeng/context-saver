@@ -1,7 +1,7 @@
 // Unit tests for Context-Saver internals (no processes spawned).
-import { test, describe, before, after } from 'node:test';
+import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
