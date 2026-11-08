@@ -80,7 +80,8 @@ jobs:
           ls -1 *.tgz
           MJS_FILES="$(tar -tzf context-saver-mcp-*.tgz | grep '\.mjs$' || true)"
           echo "$MJS_FILES"
-          test "$(echo "$MJS_FILES" | wc -l)" = 1
+          # Exact-string comparison: passes only for exactly one file with the
+          # right name. (No `wc -l` — BSD/macOS pads its output with spaces.)
           test "$MJS_FILES" = "package/context-saver.mjs"
           echo "single-file claim verified"
       - name: Install the tarball into a clean project and smoke-test it
