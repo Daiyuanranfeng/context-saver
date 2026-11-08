@@ -58,7 +58,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - name: Version consistency (package.json = server.json = CHANGELOG)
+      - name: Version consistency (package.json = server.json = CHANGELOG = context-saver.mjs)
         shell: bash
         run: |
           node --input-type=commonjs -e '
@@ -67,10 +67,16 @@ jobs:
             const reg = require("./server.json");
             const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
             const v = pkg.version;
+            // the runtime constant lives in the single file itself — the one
+            // place a drift is invisible to every other metadata check
+            const m = /^const VERSION = .([0-9]+\.[0-9]+\.[0-9]+).;$/m.exec(
+              fs.readFileSync("context-saver.mjs", "utf8"));
+            if (!m) throw new Error("cannot read the VERSION constant from context-saver.mjs");
+            if (m[1] !== v) throw new Error("context-saver.mjs VERSION " + m[1] + " != package.json " + v);
             if (reg.version !== v) throw new Error("server.json version mismatch: " + reg.version + " != " + v);
             if (reg.packages[0].version !== v) throw new Error("server.json package version mismatch");
             if (!changelog.includes("[" + v + "]")) throw new Error("CHANGELOG.md is missing an entry for " + v);
-            console.log("versions consistent at " + v);
+            console.log("versions consistent at " + v + " (metadata + runtime constant)");
           '
       - name: npm pack
         run: npm pack

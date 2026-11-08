@@ -282,3 +282,14 @@ describe('initialize negotiation', () => {
     assert.equal(reply2.result.protocolVersion, CS.LATEST_PROTOCOL_VERSION);
   });
 });
+
+describe('version consistency', () => {
+  test('the runtime VERSION constant equals the package metadata version', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+    const serverJson = JSON.parse(await readFile(new URL('../server.json', import.meta.url), 'utf8'));
+    assert.equal(CS.VERSION, pkg.version, 'context-saver.mjs VERSION must match package.json');
+    assert.equal(serverJson.version, pkg.version, 'server.json version must match package.json');
+    assert.equal(serverJson.packages[0].version, pkg.version, 'server.json package version must match package.json');
+  });
+});

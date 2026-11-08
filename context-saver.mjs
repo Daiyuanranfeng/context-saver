@@ -46,7 +46,7 @@ import readline from 'node:readline';
 // [01] constants & environment
 // ---------------------------------------------------------------------------
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.2';
 const SERVER_NAME = 'context-saver';
 const SERVER_TITLE = 'Context-Saver MCP Gateway';
 
