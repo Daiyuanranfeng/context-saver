@@ -2050,7 +2050,12 @@ function createGatewayHttpServer({ engine, manager, auth = null, allowedOrigins 
 
   async function route(req, res) {
     const u = new URL(req.url, `http://${req.headers.host || 'internal.invalid'}`);
-    const pathname = decodeURIComponent(u.pathname);
+    let pathname;
+    try {
+      pathname = decodeURIComponent(u.pathname);
+    } catch {
+      return sendJson(res, 404, { error: 'not found', hint: 'MCP endpoint is /mcp' });
+    }
 
     if (pathname === '/health' && req.method === 'GET') {
       return sendJson(res, 200, {
@@ -2347,6 +2352,24 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+/**
+ * Parse an application/x-www-form-urlencoded body. Returns null when the body
+ * contains a malformed percent-escape: decodeURIComponent() throws on those,
+ * and an unhandled throw would answer 500 instead of a 4xx (probe-verified).
+ */
+function parseFormBody(bodyText) {
+  const form = {};
+  try {
+    for (const pair of String(bodyText).split('&')) {
+      const idx = pair.indexOf('=');
+      if (idx === -1) continue;
+      form[decodeURIComponent(pair.slice(0, idx).replace(/\+/g, ' '))] = decodeURIComponent(pair.slice(idx + 1).replace(/\+/g, ' '));
+    }
+  } catch {
+    return null;
+  }
+  return form;
+}
 
 function errorPageHtml(title, detail) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
@@ -2575,13 +2598,11 @@ class OAuthProvider {
     // POST — the decision
     const { err, body } = await readBody(req, 64 * 1024);
     if (err) { res.writeHead(400); res.end(); return; }
-    const params = {};
-    for (const pair of body.toString('utf8').split('&')) {
-      const idx = pair.indexOf('=');
-      if (idx === -1) continue;
-      const k = decodeURIComponent(pair.slice(0, idx).replace(/\+/g, ' '));
-      const v = decodeURIComponent(pair.slice(idx + 1).replace(/\+/g, ' '));
-      params[k] = v;
+    const params = parseFormBody(body.toString('utf8'));
+    if (params === null) {
+      res.writeHead(400, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(errorPageHtml('Bad request', 'The form body contains invalid percent-encoding.'));
+      return;
     }
     const v = this._validateAuthorize(params);
     const target = v.redirectUri ? new URL(v.redirectUri) : null;
@@ -2635,12 +2656,8 @@ class OAuthProvider {
     }
     const { err, body } = await readBody(req, 256 * 1024);
     if (err) return sendJson(res, 400, { error: 'invalid_request' }, corsHeaders);
-    const form = {};
-    for (const pair of body.toString('utf8').split('&')) {
-      const idx = pair.indexOf('=');
-      if (idx === -1) continue;
-      form[decodeURIComponent(pair.slice(0, idx).replace(/\+/g, ' '))] = decodeURIComponent(pair.slice(idx + 1).replace(/\+/g, ' '));
-    }
+    const form = parseFormBody(body.toString('utf8'));
+    if (form === null) return sendJson(res, 400, { error: 'invalid_request', error_description: 'form body contains invalid percent-encoding' }, corsHeaders);
     const grantType = form.grant_type;
 
     if (grantType === 'authorization_code') {

@@ -359,3 +359,36 @@ describe('audit: round 2 — fix 7 (expired OAuth state is purged)', () => {
   });
 });
 
+
+// ---------------------------------------------------------------- fix 8
+describe('audit: round 2 — fix 8 (malformed percent-encoding answers 4xx, not 500)', () => {
+  test('POST /token, POST /authorize and GET paths with invalid %-escapes return 4xx', async () => {
+    const portFile = path.join(TMP, `pct-${Math.random().toString(36).slice(2)}.txt`);
+    const child = spawn(process.execPath, [SELF, '--transport', 'http', '--port', '0', '--port-file', portFile, '--demo'], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+      env: { ...process.env, CONTEXT_SAVER_LOG: 'silent' },
+    });
+    try {
+      let base;
+      for (let i = 0; i < 200; i++) { await sleep(50); try { base = `http://127.0.0.1:${Number(readFileSync(portFile, 'utf8').trim())}`; if (base) break; } catch { /* not yet */ } }
+      assert.ok(base, 'gateway did not start');
+      // auth is ON so the OAuth endpoints are mounted; body parsing happens
+      // before client validation, so no valid client is needed to test decoding
+      const token = await fetch(`${base}/token`, {
+        method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: 'grant_type=authorization_code&code=%E0%A4%A&client_id=x',
+      });
+      assert.equal(token.status, 400, `token endpoint returned ${token.status}`);
+      const auth = await fetch(`${base}/authorize`, {
+        method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: 'action=approve&client_id=%FF&redirect_uri=%C3',
+      });
+      assert.equal(auth.status, 400, `authorize endpoint returned ${auth.status}`);
+      const path404 = await fetch(`${base}/%zz`);
+      assert.equal(path404.status, 404, `raw path returned ${path404.status}`);
+    } finally {
+      child.kill('SIGKILL');
+    }
+  });
+});
+
