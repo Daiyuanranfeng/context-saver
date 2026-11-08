@@ -37,6 +37,7 @@ node context-saver.mjs                       # stdio gateway (default)
   --transport http       Streamable HTTP server (also serves legacy /sse)
   --port N --host H      bind address (default 127.0.0.1:3270)
   --auth / --no-auth     OAuth 2.1 gate for HTTP mode (default: on)
+  --approval-token <t>   pairing code the consent page demands off-loopback (required there)
   --demo                 3 built-in demo downstream servers, zero setup
   --client               interactive REPL client (great with --demo)
   --doctor               self-diagnostic, exit 0 = healthy

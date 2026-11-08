@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="308" viewBox="0 0 880 308" role="img" aria-label="Context-Saver: one MCP connection, every tool — tool schemas loaded per turn instead of per session">
+  <title>Context-Saver — the token-saving MCP gateway</title>
+  <defs>
+    <style>
+      .mono { font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, 'Liberation Mono', monospace; }
+      .sans { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; }
+      .word { font-size: 44px; font-weight: 700; letter-spacing: -1px; fill: #1f2328; }
+      .tag  { font-size: 15px; fill: #59636e; }
+      .lbl  { font-size: 12.5px; fill: #59636e; }
+      .val  { font-size: 13px; font-weight: 700; fill: #24292f; }
+      .num  { font-size: 27px; font-weight: 700; fill: #1a7f37; }
+      .foot { font-size: 11.5px; fill: #6e7781; }
+    </style>
+  </defs>
+
+  <!-- wordmark: the collapse glyph (long bar -> short bar) -->
+  <g transform="translate(36,40)">
+    <rect x="0" y="0" width="64" height="64" rx="14" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1.5"/>
+    <rect x="13" y="17" width="38" height="7"  rx="3.5" fill="#9a6700"/>
+    <rect x="13" y="29" width="38" height="7"  rx="3.5" fill="#9a6700" opacity="0.5"/>
+    <rect x="13" y="41" width="17" height="7"  rx="3.5" fill="#1a7f37"/>
+  </g>
+  <text x="120" y="72"  class="mono word">context&#8209;saver</text>
+  <text x="122" y="98" class="sans tag">one MCP connection · every tool · schemas only for the turn that needs them</text>
+
+  <!-- the money chart: measured on the built-in demo fleet -->
+  <g transform="translate(36,158)">
+    <text x="0" y="0" class="lbl">direct connections — 3 servers, all 16 tool schemas, every session</text>
+    <rect x="0" y="10" width="540" height="22" rx="5" fill="#9a6700" opacity="0.85"/>
+    <text x="552" y="26" class="val" fill="#9a6700">≈2,261 tok</text>
+
+    <text x="0" y="72" class="lbl">context-saver — 6 meta-tools + the 2 tools this task loaded</text>
+    <rect x="0" y="82" width="201" height="22" rx="5" fill="#1a7f37"/>
+    <text x="213" y="98" class="val" fill="#1a7f37">≈817 tok</text>
+  </g>
+
+  <g transform="translate(680,158)">
+    <text x="0" y="30" class="mono num">−63.9%</text>
+    <text x="2" y="54" class="lbl">measured on the demo fleet</text>
+    <text x="2" y="72" class="lbl">grows to −97% at 25 servers</text>
+  </g>
+
+  <text x="36" y="290" class="mono foot">single file · zero dependencies · node ≥ 18.17 · MIT</text>
+</svg>

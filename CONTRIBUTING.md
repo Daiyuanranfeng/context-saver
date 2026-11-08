@@ -8,7 +8,7 @@ intentionally boring — that's what keeps a single-file gateway trustworthy.
 ```bash
 git clone https://github.com/renniyy/context-saver && cd context-saver
 npm install          # dev-only: ESLint. The product itself has zero deps.
-npm test             # 83 tests: unit + stdio E2E + HTTP/OAuth + audit probes
+npm test             # 92 tests: unit + stdio E2E + HTTP/OAuth + audit probes (2 audit rounds)
 npm run lint         # must report 0 problems
 node context-saver.mjs --doctor   # end-to-end self-diagnostic
 node context-saver.mjs --demo --client   # play with it interactively

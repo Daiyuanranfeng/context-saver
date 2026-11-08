@@ -1,90 +1,94 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 440" font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" role="img" aria-label="Context-Saver architecture: one gateway between your AI client and many MCP servers">
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="440" viewBox="0 0 1000 440" role="img" aria-label="Context-Saver architecture: one gateway between the AI client and N downstream MCP servers, loading tool schemas on demand">
   <title>Context-Saver architecture</title>
   <defs>
-    <linearGradient id="logo" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3fb950"/>
-      <stop offset="1" stop-color="#58a6ff"/>
-    </linearGradient>
-    <linearGradient id="gw" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1c2333"/>
-      <stop offset="1" stop-color="#131a28"/>
-    </linearGradient>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b949e"/>
+    <style>
+      .mono { font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, 'Liberation Mono', monospace; }
+      .sans { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; }
+      .h    { font-size: 16px; font-weight: 700; fill: #f0f6fc; }
+      .sub  { font-size: 11px; fill: #8b949e; }
+      .mod  { font-size: 12px; fill: #e6edf3; }
+      .modk { font-size: 12px; font-weight: 700; fill: #79c0ff; }
+      .box  { fill: #161b22; stroke: #30363d; stroke-width: 1.5; }
+      .modb { fill: #0d1117; stroke: #30363d; stroke-width: 1; }
+      .gw   { fill: #11161d; stroke: #388bfd; stroke-width: 1.8; }
+      .arrow{ stroke: #8b949e; stroke-width: 1.6; fill: none; }
+      .dash { stroke: #3fb950; stroke-width: 1.6; fill: none; stroke-dasharray: 5 4; }
+      .albl { font-size: 10.5px; fill: #8b949e; }
+      .alblg{ font-size: 10.5px; fill: #3fb950; }
+      .cap  { font-size: 11px; fill: #6e7681; }
+    </style>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8b949e"/>
     </marker>
-    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3fb950"/>
+    <marker id="mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#3fb950"/>
     </marker>
   </defs>
 
-  <rect width="980" height="440" fill="#0d1117"/>
-  <text x="490" y="34" text-anchor="middle" fill="#e6edf3" font-size="19" font-weight="700">Context-Saver — the MCP gateway</text>
-  <text x="490" y="54" text-anchor="middle" fill="#8b949e" font-size="12">one connection · every tool · schemas only when a turn needs them</text>
+  <rect x="0.5" y="0.5" width="999" height="439" rx="12" fill="#0d1117"/>
 
-  <!-- client -->
-  <rect x="22" y="120" width="196" height="180" rx="12" fill="#161b22" stroke="#30363d"/>
-  <text x="120" y="148" text-anchor="middle" fill="#e6edf3" font-size="14" font-weight="700">Your AI client</text>
-  <g fill="#8b949e" font-size="12" text-anchor="middle">
-    <text x="120" y="188">Claude Code</text>
-    <text x="120" y="212">Cursor</text>
-    <text x="120" y="236">Claude Desktop</text>
-    <text x="120" y="260">any MCP client</text>
+  <!-- ── your AI client ─────────────────────────────────────────────── -->
+  <rect class="box" x="16" y="118" width="184" height="180" rx="10"/>
+  <text class="h" x="108" y="148" text-anchor="middle">your AI client</text>
+  <text class="sub mono" x="108" y="168" text-anchor="middle">configure one server</text>
+  <g class="mono mod" text-anchor="middle">
+    <text x="108" y="200">Claude Code</text>
+    <text x="108" y="222">Cursor</text>
+    <text x="108" y="244">Claude Desktop</text>
   </g>
-  <rect x="52" y="272" width="136" height="16" rx="8" fill="#21262d"/>
-  <text x="120" y="284" text-anchor="middle" fill="#79c0ff" font-size="10" font-family="ui-monospace,Menlo,monospace">stdio · HTTP+SSE · OAuth</text>
+  <text class="sub mono" x="108" y="278" text-anchor="middle">tools/list = 6, always</text>
 
-  <!-- gateway -->
-  <rect x="286" y="92" width="408" height="256" rx="14" fill="url(#gw)" stroke="#2ea043" stroke-width="1.6"/>
-  <rect x="466" y="78" width="48" height="30" rx="8" fill="url(#logo)"/>
-  <text x="490" y="140" text-anchor="middle" fill="#e6edf3" font-size="15" font-weight="700">Context-Saver</text>
-  <text x="490" y="158" text-anchor="middle" fill="#8b949e" font-size="11">single MCP server you configure</text>
+  <!-- ── the gateway ─────────────────────────────────────────────────── -->
+  <rect class="gw" x="272" y="56" width="420" height="316" rx="12"/>
+  <text class="h mono" x="482" y="86" text-anchor="middle">context-saver</text>
+  <text class="sub" x="482" y="104" text-anchor="middle">the only MCP server you configure</text>
 
-  <g>
-    <rect x="304" y="172" width="180" height="70" rx="8" fill="#161b22" stroke="#30363d"/>
-    <text x="316" y="192" fill="#79c0ff" font-size="11" font-weight="700">6 meta-tools · ≈680 tok</text>
-    <text x="316" y="208" fill="#8b949e" font-size="10">cs_discover · cs_plan · cs_load</text>
-    <text x="316" y="222" fill="#8b949e" font-size="10">cs_unload · cs_call · cs_status</text>
+  <rect class="modb" x="288" y="118" width="388" height="60" rx="7"/>
+  <text class="modk mono" x="300" y="137">6 meta-tools — ≈676 tok, fixed</text>
+  <text class="mod mono"  x="300" y="154">cs_discover · cs_plan · cs_load · cs_call</text>
+  <text class="mod mono"  x="300" y="170">cs_unload · cs_status</text>
 
-    <rect x="496" y="172" width="180" height="70" rx="8" fill="#161b22" stroke="#30363d"/>
-    <text x="508" y="192" fill="#d2a8ff" font-size="11" font-weight="700">Prompt planner</text>
-    <text x="508" y="208" fill="#8b949e" font-size="10">scores the task text against</text>
-    <text x="508" y="222" fill="#8b949e" font-size="10">the catalog → minimal toolset</text>
+  <rect class="modb" x="288" y="186" width="388" height="44" rx="7"/>
+  <text class="modk mono" x="300" y="204">planner — cs_plan</text>
+  <text class="mod mono"  x="300" y="221">task → the minimal toolset (catalog-scored)</text>
 
-    <rect x="304" y="254" width="180" height="70" rx="8" fill="#161b22" stroke="#30363d"/>
-    <text x="316" y="274" fill="#3fb950" font-size="11" font-weight="700">Lazy loader + router</text>
-    <text x="316" y="290" fill="#8b949e" font-size="10">connect on demand · restart</text>
-    <text x="316" y="304" fill="#8b949e" font-size="10">on crash · idle reaping · cache</text>
+  <rect class="modb" x="288" y="238" width="388" height="44" rx="7"/>
+  <text class="modk mono" x="300" y="256">lazy router</text>
+  <text class="mod mono"  x="300" y="273">connect · fetch schema · call · reap</text>
 
-    <rect x="496" y="254" width="180" height="70" rx="8" fill="#161b22" stroke="#30363d"/>
-    <text x="508" y="274" fill="#f0883e" font-size="11" font-weight="700">OAuth 2.1 + accounting</text>
-    <text x="508" y="290" fill="#8b949e" font-size="10">PKCE login pop-up · tokens</text>
-    <text x="508" y="304" fill="#8b949e" font-size="10">live token-savings report</text>
+  <rect class="modb" x="288" y="290" width="388" height="44" rx="7"/>
+  <text class="modk mono" x="300" y="308">OAuth 2.1 · Streamable HTTP + SSE</text>
+  <text class="mod mono"  x="300" y="325">remote-ready: one URL, popup login, PKCE</text>
+
+  <text class="sub mono" x="482" y="358" text-anchor="middle">catalog cached on disk — discovery costs zero connections</text>
+
+  <!-- ── downstream servers ──────────────────────────────────────────── -->
+  <rect class="box" x="800" y="96" width="170" height="240" rx="10"/>
+  <text class="h" x="885" y="126" text-anchor="middle">downstream</text>
+  <text class="sub mono" x="885" y="144" text-anchor="middle">N MCP servers</text>
+  <g class="mono mod" text-anchor="middle">
+    <text x="885" y="176">filesystem</text>
+    <text x="885" y="200">github</text>
+    <text x="885" y="224">postgres</text>
+    <text x="885" y="248">your scrapers</text>
+    <text x="885" y="272" fill="#8b949e">… dozens more</text>
   </g>
+  <text class="sub mono" x="885" y="312" text-anchor="middle">spawned / dialed</text>
+  <text class="sub mono" x="885" y="328" text-anchor="middle">only when a tool loads</text>
 
-  <!-- downstreams -->
-  <text x="846" y="118" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="700">Downstream servers</text>
-  <text x="846" y="134" text-anchor="middle" fill="#8b949e" font-size="10">spawn / HTTP — only when needed</text>
-  <g font-family="ui-monospace,Menlo,monospace" font-size="11" text-anchor="middle">
-    <rect x="742" y="148" width="208" height="36" rx="8" fill="#161b22" stroke="#30363d"/><text x="846" y="171" fill="#e6edf3">@modelcontextprotocol/server-filesystem</text>
-    <rect x="742" y="194" width="208" height="36" rx="8" fill="#161b22" stroke="#30363d"/><text x="846" y="217" fill="#e6edf3">github · postgres · puppeteer</text>
-    <rect x="742" y="240" width="208" height="36" rx="8" fill="#161b22" stroke="#30363d"/><text x="846" y="263" fill="#e6edf3">scrapling · browser-use · …</text>
-    <rect x="742" y="286" width="208" height="36" rx="8" fill="#161b22" stroke="#30363d" stroke-dasharray="4 3"/><text x="846" y="309" fill="#8b949e">+ dozens more — zero extra setup</text>
-  </g>
+  <!-- ── arrows ──────────────────────────────────────────────────────── -->
+  <line class="arrow" x1="200" y1="196" x2="266" y2="196" marker-end="url(#m)" marker-start="url(#m)"/>
+  <line class="arrow" x1="200" y1="236" x2="266" y2="236" marker-end="url(#m)" marker-start="url(#m)"/>
+  <text class="albl mono" x="233" y="184" text-anchor="middle">1 JSON-RPC</text>
+  <text class="albl mono" x="233" y="256" text-anchor="middle">connection</text>
 
-  <!-- arrows -->
-  <line x1="218" y1="190" x2="286" y2="190" stroke="#8b949e" stroke-width="1.6" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
-  <text x="252" y="180" text-anchor="middle" fill="#8b949e" font-size="9">1 connection</text>
-  <text x="252" y="204" text-anchor="middle" fill="#3fb950" font-size="9">≈680 tok, fixed</text>
+  <line class="dash" x1="692" y1="182" x2="794" y2="182" marker-end="url(#mg)"/>
+  <line class="dash" x1="692" y1="212" x2="794" y2="212" marker-end="url(#mg)"/>
+  <line class="dash" x1="692" y1="242" x2="794" y2="242" marker-end="url(#mg)"/>
+  <text class="alblg mono" x="746" y="168" text-anchor="middle">on demand:</text>
+  <text class="alblg mono" x="746" y="262" text-anchor="middle">schema per tool</text>
 
-  <g stroke="#3fb950" stroke-width="1.4" stroke-dasharray="5 4">
-    <line x1="694" y1="166" x2="742" y2="166"/>
-    <line x1="694" y1="212" x2="742" y2="212"/>
-    <line x1="694" y1="258" x2="742" y2="258"/>
-    <line x1="694" y1="304" x2="742" y2="304"/>
-  </g>
-  <text x="718" y="152" text-anchor="middle" fill="#3fb950" font-size="9">lazy</text>
-
-  <!-- savings badge -->
-  <rect x="330" y="376" width="320" height="42" rx="21" fill="#12261e" stroke="#2ea043"/>
-  <text x="490" y="402" text-anchor="middle" fill="#3fb950" font-size="14" font-weight="700">same tools — ~90% less context</text>
+  <!-- ── per-turn sequence strip ─────────────────────────────────────── -->
+  <text class="cap mono" x="500" y="400" text-anchor="middle">one turn on the wire:  cs_plan {"task": …}  →  cs_load ["github__create_issue"]  →  tools/call github__create_issue  →  cs_unload</text>
+  <text class="cap mono" x="500" y="418" text-anchor="middle">schemas enter the context for the turn that needs them — then leave. no rent.</text>
 </svg>
