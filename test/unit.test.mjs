@@ -128,6 +128,17 @@ describe('config loading', () => {
     assert.equal(a.servers.one.type, 'stdio');
   });
 
+  test('loads the three timing defaults separately from server overrides', () => {
+    const defaults = { timeoutMs: 500, initTimeoutMs: 3000, idleMs: 10000 };
+    const cfg = CS.loadConfig(file({ defaults, servers: {
+      inherited: { command: 'node' },
+      overridden: { command: 'node', timeoutMs: 5000 },
+    } }));
+    assert.deepEqual(cfg.defaults, defaults);
+    assert.equal(cfg.servers.inherited.timeoutMs, undefined);
+    assert.equal(cfg.servers.overridden.timeoutMs, 5000);
+  });
+
   test('http url entries become type http; transport=sse becomes legacy-sse', () => {
     const cfg = CS.loadConfig(file({ servers: {
       h: { url: 'https://example.com/mcp' },

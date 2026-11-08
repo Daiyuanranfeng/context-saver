@@ -38,9 +38,9 @@ const rawExchange = (client, line, timeoutMs = 5_000) => new Promise((resolve, r
   client.child.stdin.write(`${line}\n`);
 });
 
-const customConfig = (servers) => {
+const customConfig = (servers, defaults) => {
   const p = path.join(TMP, `cfg-${Math.random().toString(36).slice(2)}.json`);
-  writeFileSync(p, JSON.stringify({ servers }));
+  writeFileSync(p, JSON.stringify({ servers, defaults }));
   return p;
 };
 const demoServer = (name, extra = {}) => ({
@@ -266,6 +266,27 @@ describe('downstream failure modes (custom config)', () => {
       client.close();
     }
   });
+});
+
+test('a downstream call inherits the default timeout unless its server overrides it', async () => {
+  const cfg = customConfig({
+    inherited: demoServer('demo-chaos'),
+    overridden: demoServer('demo-chaos', { timeoutMs: 5000 }),
+  }, { timeoutMs: 500 });
+  const client = CS.SimpleMcpClient.spawn(['--config', cfg, '--cache-dir', path.join(TMP, 'defaults-cache')]);
+  try {
+    await client.initialize('e2e-default-timeout');
+    const args = { seconds: 2 };
+    const inherited = await call(client, 'cs_call', { tool: 'inherited__slow', args });
+    assert.equal(inherited.result?.isError, true);
+    assert.match(textOf(inherited), /inherited\.slow timed out/);
+
+    const overridden = await call(client, 'cs_call', { tool: 'overridden__slow', args });
+    assert.notEqual(overridden.result?.isError, true);
+    assert.match(textOf(overridden), /slept/i);
+  } finally {
+    client.close();
+  }
 });
 
 describe('pagination, globs and name sanitization', () => {
