@@ -3151,7 +3151,10 @@ function buildDemoConfigFile() {
   const file = path.join(tmpdir(), `context-saver-demo-${process.pid}-${Date.now()}.json`);
   writeFileSync(file, JSON.stringify(config, null, 2), 'utf8');
   // Throwaway configs must not litter the tmpdir (CI runners, scheduled --doctor).
-  // 'exit' fires on normal exits and on process.exit() from our signal handlers.
+  // The caller deletes the file eagerly right after loadConfig() parses it.
+  // 'exit' is only a belt-and-braces for the tiny write→parse window: on Windows a
+  // hard kill (TerminateProcess) skips 'exit' handlers entirely, so exit-time
+  // cleanup alone demonstrably leaks files — see audit fix 4's follow-up.
   process.on('exit', () => {
     try { rmSync(file, { force: true }); } catch { /* best effort */ }
   });
@@ -3259,8 +3262,10 @@ function printToolResult(result) {
 }
 
 async function runReplClient(args = {}) {
-  const configPath = args.demo ? buildDemoConfigFile() : (args.config || findConfigFile());
-  if (!configPath) {
+  // In --demo mode the spawned gateway builds (and eagerly deletes) its own
+  // demo config; writing another one here would be pure tmpdir litter.
+  const configPath = args.demo ? null : (args.config || findConfigFile());
+  if (!configPath && !args.demo) {
     console.error('No config found for --client. Pass --demo or --config <file>.');
     process.exit(1);
   }
@@ -3274,7 +3279,7 @@ async function runReplClient(args = {}) {
   };
 
   console.log(paint('bold', `\n${SERVER_TITLE} v${VERSION} — interactive client`));
-  console.log(paint('dim', `gateway: ${serverInfo.name} v${serverInfo.version} · config: ${configPath}`));
+  console.log(paint('dim', `gateway: ${serverInfo.name} v${serverInfo.version} · config: ${args.demo ? 'built-in demo fleet' : configPath}`));
   console.log(paint('dim', 'commands: /discover [q] · /plan <task> · /load <ids…> · /unload · /call <id> <json> · /tools · /status · /quit'));
   console.log(paint('dim', 'plain text is treated as a task for /plan\n'));
 
@@ -3593,7 +3598,8 @@ async function main() {
   }
 
   let configPath = args.config;
-  if (args.demo) configPath = buildDemoConfigFile();
+  let throwawayConfig = null;
+  if (args.demo) throwawayConfig = configPath = buildDemoConfigFile();
   let config;
   try {
     config = loadConfig(configPath);
@@ -3604,6 +3610,12 @@ async function main() {
       process.exit(1);
     }
     throw err;
+  }
+  // The demo config is parsed once and never read again — delete it eagerly.
+  // Relying on 'exit' handlers leaks the file whenever the process dies without
+  // running them (Windows TerminateProcess kills, SIGKILL, crashes).
+  if (throwawayConfig) {
+    try { rmSync(throwawayConfig, { force: true }); } catch { /* best effort */ }
   }
 
   const manager = new DownstreamManager({
