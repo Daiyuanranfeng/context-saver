@@ -30,4 +30,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exactly one file), multi-platform release artifacts with SHA256SUMS.
 - Community pipeline: good-first-issue board, issue forms, triage automation, scope bar.
 
-[1.0.0]: https://github.com/context-saver/context-saver/releases/tag/v1.0.0
+[1.0.0]: https://github.com/renniyy/context-saver/releases/tag/v1.0.0

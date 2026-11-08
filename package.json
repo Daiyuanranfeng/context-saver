@@ -48,12 +48,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/context-saver/context-saver.git"
+    "url": "git+https://github.com/renniyy/context-saver.git"
   },
   "bugs": {
-    "url": "https://github.com/context-saver/context-saver/issues"
+    "url": "https://github.com/renniyy/context-saver/issues"
   },
-  "homepage": "https://github.com/context-saver/context-saver#readme",
+  "homepage": "https://github.com/renniyy/context-saver#readme",
   "license": "MIT",
   "publishConfig": {
     "access": "public"

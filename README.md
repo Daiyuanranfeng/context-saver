@@ -15,7 +15,7 @@ session, before you even type a word.*
 [![node](https://img.shields.io/badge/node-%E2%89%A518.17-339933?logo=node.js&logoColor=white)](package.json)
 [![zero deps](https://img.shields.io/badge/dependencies-zero-58a6ff)](package.json)
 [![single file](https://img.shields.io/badge/implementation-1_file-1f6feb)](context-saver.mjs)
-[![good first issues](https://img.shields.io/github/issues/context-saver/context-saver/good%20first%20issue?color=7ee787&label=good%20first%20issues)](https://github.com/context-saver/context-saver/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+[![good first issues](https://img.shields.io/github/issues/renniyy/context-saver/good%20first%20issue?color=7ee787&label=good%20first%20issues)](https://github.com/renniyy/context-saver/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
 
 </div>
 

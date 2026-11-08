@@ -6,7 +6,7 @@ The latest tagged release (and `main` between releases).
 
 ## Reporting a vulnerability
 
-Use [GitHub private vulnerability reporting](https://github.com/context-saver/context-saver/security/advisories/new)
+Use [GitHub private vulnerability reporting](https://github.com/renniyy/context-saver/security/advisories/new)
 — please do not open public issues for suspected vulnerabilities.
 Expect an acknowledgement within 7 days.
 
