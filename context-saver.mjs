@@ -36,7 +36,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
@@ -252,7 +252,10 @@ function findConfigFile(explicitPath) {
         process.env.CONTEXT_SAVER_CONFIG,
         path.join(process.cwd(), 'context-saver.config.json'),
         path.join(process.cwd(), '.context-saver.json'),
-        path.join(process.env.HOME || tmpdir(), '.context-saver', 'config.json'),
+        // os.homedir() resolves the profile even where $HOME is unset (Windows
+        // PowerShell/CMD); the previous `process.env.HOME || tmpdir()` skipped
+        // ~/.context-saver there entirely.
+        path.join(homedir(), '.context-saver', 'config.json'),
       ].filter(Boolean);
   for (const c of candidates) {
     try {

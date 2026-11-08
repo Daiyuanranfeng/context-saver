@@ -359,7 +359,6 @@ describe('audit: round 2 — fix 7 (expired OAuth state is purged)', () => {
   });
 });
 
-
 // ---------------------------------------------------------------- fix 8
 describe('audit: round 2 — fix 8 (malformed percent-encoding answers 4xx, not 500)', () => {
   test('POST /token, POST /authorize and GET paths with invalid %-escapes return 4xx', async () => {
@@ -392,3 +391,23 @@ describe('audit: round 2 — fix 8 (malformed percent-encoding answers 4xx, not 
   });
 });
 
+// ---------------------------------------------------------------- fix 9
+describe('audit: round 2 — fix 9 (config lookup works without $HOME)', () => {
+  test('findConfigFile falls back to os.homedir(), not the tmpdir, when HOME is unset', () => {
+    const home = homedir();
+    const marker = path.join(home, '.context-saver', 'config.json');
+    const backup = (() => { try { return readFileSync(marker, 'utf8'); } catch { return null; } })();
+    mkdirSync(path.dirname(marker), { recursive: true });
+    writeFileSync(marker, JSON.stringify({ servers: { probe: { command: 'node', args: ['x'] } } }));
+    const savedHome = process.env.HOME;
+    try {
+      delete process.env.HOME;
+      const found = CS.findConfigFile(null);
+      assert.equal(found, marker, `expected ${marker}, got ${found}`);
+    } finally {
+      process.env.HOME = savedHome;
+      if (backup === null) rmSync(marker, { force: true });
+      else writeFileSync(marker, backup);
+    }
+  });
+});
