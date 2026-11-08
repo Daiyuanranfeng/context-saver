@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions & usage help
-    url: https://github.com/context-saver/context-saver/discussions
+    url: https://github.com/renniyy/context-saver/discussions
     about: Ask how to configure or deploy the gateway — issues are for bugs and pre-scoped work.

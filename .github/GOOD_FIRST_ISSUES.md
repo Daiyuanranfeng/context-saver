@@ -2,7 +2,7 @@
 
 Every item below is **pre-scoped**: you get the exact file/section to touch,
 the acceptance test to make pass, and an estimate. Issues labeled
-[`good first issue`](https://github.com/context-saver/context-saver/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+[`good first issue`](https://github.com/renniyy/context-saver/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
 mirror this list — claim one by commenting `/attempt` and mentioning your
 branch.
 
