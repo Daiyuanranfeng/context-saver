@@ -327,3 +327,35 @@ describe('audit: round 2 — fix 6 (OAuth approval needs a human)', () => {
     assert.ok(stderr.join('').includes('approval'), stderr.join(''));
   });
 });
+
+// ---------------------------------------------------------------- fix 7
+describe('audit: round 2 — fix 7 (expired OAuth state is purged)', () => {
+  test('issuing tokens sweeps expired codes, refresh tokens, access tokens and approvals', () => {
+    const p = new CS.OAuthProvider({ tokenTtlMs: 60_000, refreshTokenTtlMs: 60_000 });
+    const past = Date.now() - 1;
+    p.codes.set('csc_dead', { clientId: 'x', redirectUri: 'https://a/cb', challenge: 'a'.repeat(43), scope: 'mcp', expiresAt: past, consumed: false });
+    p.refreshTokens.set('csrt_dead', { clientId: 'x', scope: 'mcp', expiresAt: past });
+    p.tokens.set('csat_dead', { clientId: 'x', scope: 'mcp', expiresAt: past });
+    p._approvals.set('csap_dead', past);
+    p._issueTokens('x', 'mcp'); // any issuance sweeps
+    assert.equal(p.codes.size, 0, 'expired codes must be purged');
+    assert.equal(p.refreshTokens.size, 1, 'only the freshly issued refresh token may remain');
+    assert.equal(p.refreshTokens.has('csrt_dead'), false, 'the dead refresh token must be gone');
+    assert.equal(p.tokens.size, 1, 'only the freshly issued access token may remain');
+    assert.equal(p.tokens.has('csat_dead'), false, 'the dead access token must be gone');
+    assert.equal(p._approvals.size, 0, 'expired approval tokens must be purged');
+  });
+
+  test('long-running growth: 5000 abandoned authorizations leave no residue', () => {
+    const p = new CS.OAuthProvider({});
+    for (let i = 0; i < 5_000; i++) {
+      p._approvals.set(`csap_${i}`, Date.now() - 1);
+      p.codes.set(`csc_${i}`, { clientId: 'x', redirectUri: 'https://a/cb', challenge: 'a'.repeat(43), scope: 'mcp', expiresAt: Date.now() - 1, consumed: false });
+    }
+    p._lastSweep = 0; // force a sweep on the next touch
+    p._issueTokens('x', 'mcp');
+    assert.equal(p.codes.size, 0);
+    assert.equal(p._approvals.size, 0);
+  });
+});
+

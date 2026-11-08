@@ -2382,6 +2382,7 @@ class OAuthProvider {
     this.refreshTokens = new Map(); // refresh -> {clientId, scope, expiresAt}
     this._rate = new Map(); // ip -> {count, windowStart}
     this._approvals = new Map(); // one-time approval token -> expiresAt
+    this._lastSweep = 0;
   }
 
   handles(pathname, method) {
@@ -2450,6 +2451,7 @@ class OAuthProvider {
   }
 
   async route(req, res, pathname, u, { issuerBase: base }) {
+    this._sweepExpiredState();
     const corsHeaders = {
       'access-control-allow-origin': '*',
       'cache-control': 'no-store',
@@ -2679,7 +2681,24 @@ class OAuthProvider {
     sendJson(res, 400, { error: 'unsupported_grant_type' }, corsHeaders);
   }
 
+  /**
+   * Delete expired authorization codes, refresh tokens, access tokens and
+   * pending approval tokens. Called on every OAuth route (throttled) and at
+   * every token issuance: entries that expire unused would otherwise be
+   * retained forever — a slow leak on a long-running remote gateway.
+   */
+  _sweepExpiredState() {
+    const now = Date.now();
+    if (now - this._lastSweep < 30_000) return;
+    this._lastSweep = now;
+    for (const [k, v] of this.codes) if (v.expiresAt <= now) this.codes.delete(k);
+    for (const [k, v] of this.refreshTokens) if (v.expiresAt <= now) this.refreshTokens.delete(k);
+    for (const [k, v] of this.tokens) if (v.expiresAt <= now) this.tokens.delete(k);
+    for (const [k, exp] of this._approvals) if (exp <= now) this._approvals.delete(k);
+  }
+
   _issueTokens(clientId, scope) {
+    this._sweepExpiredState();
     const accessToken = `csat_${b64url(randomBytes(32))}`;
     const refreshToken = `csrt_${b64url(randomBytes(32))}`;
     this.tokens.set(accessToken, { clientId, scope, expiresAt: Date.now() + this.tokenTtlMs });
