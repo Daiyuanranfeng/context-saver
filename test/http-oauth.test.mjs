@@ -85,6 +85,7 @@ class SseCollector {
 
 const b64urlSha = (s) => createHash('sha256').update(s).digest('base64url').replace(/=+$/, '');
 const rpc = (id, method, params) => ({ jsonrpc: '2.0', id, method, ...(params !== undefined ? { params } : {}) });
+const externalOrigin = 'https://client.example.com';
 
 describe('streamable HTTP transport (no auth)', () => {
   let gw_;
@@ -215,8 +216,8 @@ describe('streamable HTTP transport (no auth)', () => {
   });
 
   test('cross-origin POSTs are rejected 403, loopback origins allowed', async () => {
-    const evil = await postMcp(gw_.base, rpc(10, 'tools/list', {}), { 'mcp-session-id': sessionId, origin: 'https://evil.example.com' });
-    assert.equal(evil.status, 403);
+    const external = await postMcp(gw_.base, rpc(10, 'tools/list', {}), { 'mcp-session-id': sessionId, origin: externalOrigin });
+    assert.equal(external.status, 403);
     const local = await postMcp(gw_.base, rpc(11, 'tools/list', {}), { 'mcp-session-id': sessionId, origin: 'http://localhost:5173' });
     assert.equal(local.status, 200);
   });
@@ -257,6 +258,47 @@ describe('streamable HTTP transport (no auth)', () => {
       collector.abort();
     }
   });
+});
+
+test('--allowed-origin permits POSTs from the configured external origin', async () => {
+  const gateway = await spawnHttp(['--no-auth', '--allowed-origin', externalOrigin]);
+  try {
+    const params = {
+      protocolVersion: CS.LATEST_PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: 'origin-test', version: '1.0.0' },
+    };
+    const allowed = await postMcp(gateway.base, rpc(1, 'initialize', params), { origin: externalOrigin });
+    assert.equal(allowed.status, 200);
+    assert.ok(allowed.headers.get('mcp-session-id'));
+    assert.equal((await allowed.json()).result.serverInfo.name, 'context-saver');
+
+    const denied = await postMcp(gateway.base, rpc(2, 'initialize', params), { origin: 'https://other.example.com' });
+    assert.equal(denied.status, 403);
+  } finally {
+    gateway.stop();
+  }
+});
+
+test('--public-url advertises the external base in OAuth metadata', async () => {
+  const publicBase = 'https://gateway.example.com';
+  const gateway = await spawnHttp(['--auth', '--public-url', publicBase]);
+  try {
+    const protectedResource = await fetch(`${gateway.base}/.well-known/oauth-protected-resource`);
+    assert.equal(protectedResource.status, 200);
+    const resource = await protectedResource.json();
+    assert.equal(resource.resource, publicBase);
+    assert.deepEqual(resource.authorization_servers, [publicBase]);
+
+    const authorizationServer = await fetch(`${gateway.base}/.well-known/oauth-authorization-server`);
+    assert.equal(authorizationServer.status, 200);
+    const metadata = await authorizationServer.json();
+    assert.equal(metadata.issuer, publicBase);
+    assert.equal(metadata.authorization_endpoint, `${publicBase}/authorize`);
+    assert.equal(metadata.token_endpoint, `${publicBase}/token`);
+  } finally {
+    gateway.stop();
+  }
 });
 
 describe('OAuth 2.1 authorization server', () => {
