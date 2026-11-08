@@ -2296,8 +2296,9 @@ function createGatewayHttpServer({ engine, manager, auth = null, allowedOrigins 
 // ---------------------------------------------------------------------------
 
 const OAUTH_SCOPES = ['mcp'];
+const APPROVAL_TOKEN_TTL_MS = 10 * 60_000;
 
-function approvalPageHtml({ clientName, base, scopes }) {
+function approvalPageHtml({ clientName, base, scopes, pairing }) {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Authorize — Context-Saver</title>
@@ -2310,6 +2311,10 @@ function approvalPageHtml({ clientName, base, scopes }) {
   p{margin:14px 0;color:#8b949e}
   b{color:#e6edf3}
   .scopes{margin:18px 0;padding:12px 16px;background:#0d1117;border:1px solid #30363d;border-radius:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:#79c0ff}
+  .pairing{margin:18px 0;padding:14px 16px;background:#161b22;border:1px solid #b8871b;border-radius:8px}
+  .pairing label{display:block;font-size:13px;color:#e3b341;margin-bottom:8px;font-weight:600}
+  .pairing input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font:15px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em}
+  .pairing small{display:block;margin-top:8px;color:#8b949e;font-size:12px}
   .btns{display:flex;gap:12px;margin-top:22px}
   button{flex:1;padding:11px 0;border-radius:8px;border:1px solid #30363d;font-size:15px;font-weight:600;cursor:pointer}
   .approve{background:#238636;border-color:#2ea043;color:#fff}
@@ -2322,6 +2327,12 @@ function approvalPageHtml({ clientName, base, scopes }) {
   <h1><span class="logo"></span>Context-Saver</h1>
   <p><b>${escapeHtml(clientName)}</b> wants to access this MCP gateway.</p>
   <div class="scopes">scope: ${escapeHtml(scopes)}<br>server: ${escapeHtml(base)}</div>
+  ${pairing ? `<div class="pairing">
+    <label for="pairing_code">Pairing code</label>
+    <input id="pairing_code" name="pairing_code" autocomplete="off" autofocus placeholder="from the gateway console">
+    <small>This gateway is exposed beyond loopback. Enter the pairing code its operator
+    set (<code>--approval-token</code>) to authorize ${escapeHtml(clientName)}.</small>
+  </div>` : ''}
   <p style="font-size:13px">Approving grants a bearer token valid for this gateway's MCP endpoint. You can revoke by restarting the gateway.</p>
   __HIDDEN__
   <div class="btns">
@@ -2335,6 +2346,7 @@ function approvalPageHtml({ clientName, base, scopes }) {
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+
 
 function errorPageHtml(title, detail) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
@@ -2356,15 +2368,20 @@ function secretEquals(a, b) {
 }
 
 class OAuthProvider {
-  constructor({ tokenTtlMs, refreshTokenTtlMs } = {}) {
+  constructor({ tokenTtlMs, refreshTokenTtlMs, pairingSecret } = {}) {
     const settings = SETTINGS();
     this.tokenTtlMs = tokenTtlMs ?? settings.tokenTtlMs;
     this.refreshTokenTtlMs = refreshTokenTtlMs ?? settings.refreshTokenTtlMs;
+    // When set (non-loopback deployments), the approval decision must present
+    // this secret: the consent page alone is not proof of a human on the other
+    // end of a network bind.
+    this.pairingSecret = typeof pairingSecret === 'string' && pairingSecret ? pairingSecret : null;
     this.clients = new Map(); // client_id -> {name, redirectUris[], secret?}
     this.codes = new Map(); // code -> {clientId, redirectUri, challenge, scope, expiresAt, consumed}
     this.tokens = new Map(); // access -> {clientId, scope, expiresAt}
     this.refreshTokens = new Map(); // refresh -> {clientId, scope, expiresAt}
     this._rate = new Map(); // ip -> {count, windowStart}
+    this._approvals = new Map(); // one-time approval token -> expiresAt
   }
 
   handles(pathname, method) {
@@ -2386,6 +2403,32 @@ class OAuthProvider {
       return null;
     }
     return { clientId: entry.clientId, scope: entry.scope };
+  }
+
+  /**
+   * One-time approval token: minted when the consent page is rendered,
+   * consumed by the decision POST. A scripted approval that never loaded the
+   * page cannot know it; a cross-site form post cannot read it (same-origin).
+   */
+  _mintApprovalToken() {
+    if (this._approvals.size >= 4_096) {
+      log.warn('oauth', 'pending-approval map exceeded 4096 entries; resetting');
+      this._approvals.clear();
+    }
+    const token = `csap_${b64url(randomBytes(16))}`;
+    this._approvals.set(token, Date.now() + APPROVAL_TOKEN_TTL_MS);
+    return token;
+  }
+
+  _consumeApprovalToken(token) {
+    if (typeof token !== 'string') return false;
+    const expiresAt = this._approvals.get(token);
+    if (expiresAt === undefined || Date.now() >= expiresAt) {
+      this._approvals.delete(token);
+      return false;
+    }
+    this._approvals.delete(token);
+    return true;
   }
 
   _rateLimited(req) {
@@ -2517,9 +2560,13 @@ class OAuthProvider {
         .filter((k) => params[k] !== undefined)
         .map((k) => `<input type="hidden" name="${k}" value="${escapeHtml(params[k])}">`)
         .join('');
+      // One-time approval token: the decision POST must present it, proving the
+      // request came from this rendered page and not from a script or another site.
+      const approvalToken = this._mintApprovalToken();
+      const hiddenWithToken = `${hidden}<input type="hidden" name="approval_token" value="${approvalToken}">`;
       const scope = params.scope || OAUTH_SCOPES.join(' ');
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-      res.end(approvalPageHtml({ clientName: v.client.name, base, scopes: scope }).replace('__HIDDEN__', hidden));
+      res.end(approvalPageHtml({ clientName: v.client.name, base, scopes: scope, pairing: Boolean(this.pairingSecret) }).replace('__HIDDEN__', hiddenWithToken));
       return;
     }
 
@@ -2539,6 +2586,21 @@ class OAuthProvider {
     if (!target) {
       res.writeHead(400, { 'content-type': 'text/html; charset=utf-8' });
       res.end(errorPageHtml('Authorization error', v.detail || 'invalid request'));
+      return;
+    }
+    // The approval decision must carry the one-time token minted when the
+    // consent page was rendered — otherwise the "human approval" is forgeable
+    // by three plain HTTP POSTs (register, approve, exchange) with no browser.
+    if (!this._consumeApprovalToken(params.approval_token)) {
+      log.warn('oauth', 'rejected an approval decision without a valid approval token (scripted or cross-site?)');
+      res.writeHead(400, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(errorPageHtml('Stale authorization', 'This approval link has expired or was not opened in the browser. Restart the sign-in from your MCP client.'));
+      return;
+    }
+    if (this.pairingSecret && !secretEquals(params.pairing_code, this.pairingSecret)) {
+      log.warn('oauth', 'rejected an approval decision with the wrong pairing code');
+      res.writeHead(403, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(errorPageHtml('Wrong pairing code', 'Ask the gateway operator for the current pairing code (--approval-token).'));
       return;
     }
     if (params.action !== 'approve') {
@@ -3510,6 +3572,9 @@ OPTIONS
   --port-file <file>     write the actual HTTP port here (useful for tests)
   --auth | --no-auth     OAuth 2.1 gate for HTTP mode (default: on). Binding a non-loopback
                          host without --auth is refused unless --insecure is also given.
+  --approval-token <t>   pairing code the consent page demands when you bind off-loopback with
+                         --auth (required there; also settable via CONTEXT_SAVER_APPROVAL_TOKEN).
+                         Without it a scripted client could "approve" itself without a human.
   --public-url <url>     external base URL for OAuth metadata (behind a reverse proxy)
   --allowed-origin <o>   allow this Origin (repeatable) in addition to same-origin/loopback
   --cache-dir <dir>      catalog cache location (default: ~/.context-saver or $TMPDIR)
@@ -3524,6 +3589,7 @@ ENVIRONMENT
   CONTEXT_SAVER_SESSION_TTL_MS    idle HTTP session lifetime (default 30 min)
   CONTEXT_SAVER_DOWNSTREAM_IDLE_MS  idle downstream reaping (default 10 min, 0 = off)
   CONTEXT_SAVER_TOKEN_TTL_MS      OAuth access-token lifetime (default 1 h)
+  CONTEXT_SAVER_APPROVAL_TOKEN    pairing code for the OAuth consent page (off-loopback)
 
 The entire gateway is one zero-dependency file. MIT licensed.
 `.trim();
@@ -3557,6 +3623,7 @@ function parseArgs(argv) {
       case '--port-file': out.portFile = next(); break;
       case '--auth': out.auth = true; break;
       case '--no-auth': out.auth = false; break;
+      case '--approval-token': out.approvalToken = next(); break;
       case '--allowed-origin': out.allowedOrigins.push(next()); break;
       case '--public-url': out.publicUrl = next().replace(/\/$/, ''); break;
       case '--cache-dir': out.cacheDir = next(); break;
@@ -3641,7 +3708,16 @@ async function main() {
       '  use --auth (recommended), bind a loopback --host, or pass --insecure to accept the risk.');
     process.exit(2);
   }
-  const auth = authOn ? new OAuthProvider({}) : null;
+  const approvalToken = args.approvalToken ?? process.env.CONTEXT_SAVER_APPROVAL_TOKEN ?? null;
+  if (!isLoopbackBind(args.host) && authOn && !approvalToken && !args.insecure) {
+    console.error(`refusing to bind http://${args.host}:${args.port} with OAuth but no approval pairing code.\n` +
+      '  With only a consent page, any script can approve itself over the network:\n' +
+      '  register a client, POST action=approve, exchange the code — no human involved.\n' +
+      '  Pass --approval-token <secret> (or CONTEXT_SAVER_APPROVAL_TOKEN): the consent page\n' +
+      '  will ask whoever signs in to type it. Or bind loopback, or --insecure to accept the risk.');
+    process.exit(2);
+  }
+  const auth = authOn ? new OAuthProvider({ pairingSecret: approvalToken }) : null;
   const server = createGatewayHttpServer({
     engine, manager, auth,
     allowedOrigins: args.allowedOrigins,

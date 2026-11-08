@@ -4,8 +4,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
@@ -233,5 +233,97 @@ describe('audit: fix 4 — demo config cleanup', () => {
     await sleep(300);
     const after = listDemoConfigs().length;
     assert.equal(after, before, `demo config files leaked in ${tmpdir()} (${before} -> ${after})`);
+  });
+});
+
+// ---------------------------------------------------------------- audit round 2
+describe('audit: round 2 — fix 6 (OAuth approval needs a human)', () => {
+  const spawnGw = (extraArgs, env = {}) => {
+    const portFile = path.join(TMP, `r2-${Math.random().toString(36).slice(2)}.txt`);
+    const child = spawn(process.execPath, [SELF, '--transport', 'http', '--port', '0', '--port-file', portFile, '--demo', ...extraArgs], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+      env: { ...process.env, CONTEXT_SAVER_LOG: 'silent', ...env },
+    });
+    const base = (async () => {
+      for (let i = 0; i < 200; i++) {
+        await sleep(50);
+        try { return `http://127.0.0.1:${Number(readFileSync(portFile, 'utf8').trim())}`; } catch { /* not yet */ }
+      }
+      throw new Error('gateway did not start');
+    })();
+    return { child, base, stop: () => child.kill('SIGKILL') };
+  };
+  const register = async (base, name = 'probe-client') => fetch(`${base}/register`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ client_name: name, redirect_uris: ['http://127.0.0.1:1/cb'], token_endpoint_auth_method: 'none' }),
+  }).then((r) => r.json());
+  const scriptedApprove = (base, clientId, challenge) => fetch(`${base}/authorize`, {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      action: 'approve', client_id: clientId, redirect_uri: 'http://127.0.0.1:1/cb', response_type: 'code',
+      code_challenge: challenge, code_challenge_method: 'S256', scope: 'mcp',
+    }).toString(),
+    redirect: 'manual',
+  });
+
+  test('the three-POST self-approval (register -> approve -> token) is rejected', async () => {
+    const gw = await spawnGw([]); // auth on, loopback: CSRF token still required
+    try {
+      const base = await gw.base;
+      const reg = await register(base, 'scripted-attacker');
+      const dec = await scriptedApprove(base, reg.client_id, 'a'.repeat(43));
+      assert.equal(dec.status, 400, 'approval without the consent page token must be rejected');
+      const html = await dec.text();
+      assert.ok(html.includes('Stale authorization'), 'error page should explain the rejection');
+    } finally { gw.stop(); }
+  });
+
+  test('the real browser flow still works: page token + pairing code', async () => {
+    const gw = await spawnGw(['--approval-token', 'pair-secret-123']);
+    try {
+      const base = await gw.base;
+      const reg = await register(base, 'legit-client');
+      const page = await fetch(`${base}/authorize?${new URLSearchParams({
+        client_id: reg.client_id, redirect_uri: 'http://127.0.0.1:1/cb', response_type: 'code',
+        code_challenge: 'a'.repeat(43), code_challenge_method: 'S256', scope: 'mcp',
+      })}`);
+      const html = await page.text();
+      assert.ok(html.includes('Pairing code'), 'consent page must ask for the pairing code');
+      const approvalToken = /name="approval_token" value="([^"]+)"/.exec(html)?.[1];
+      assert.ok(approvalToken);
+
+      const wrong = await fetch(`${base}/authorize`, {
+        method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ action: 'approve', approval_token: approvalToken, pairing_code: 'wrong', client_id: reg.client_id, redirect_uri: 'http://127.0.0.1:1/cb', response_type: 'code', code_challenge: 'a'.repeat(43), code_challenge_method: 'S256' }).toString(),
+        redirect: 'manual',
+      });
+      assert.equal(wrong.status, 403, 'wrong pairing code must be rejected');
+
+      const page2 = await fetch(`${base}/authorize?${new URLSearchParams({
+        client_id: reg.client_id, redirect_uri: 'http://127.0.0.1:1/cb', response_type: 'code',
+        code_challenge: 'a'.repeat(43), code_challenge_method: 'S256', scope: 'mcp',
+      })}`);
+      const approvalToken2 = /name="approval_token" value="([^"]+)"/.exec(await page2.text())?.[1];
+      const right = await fetch(`${base}/authorize`, {
+        method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ action: 'approve', approval_token: approvalToken2, pairing_code: 'pair-secret-123', client_id: reg.client_id, redirect_uri: 'http://127.0.0.1:1/cb', response_type: 'code', code_challenge: 'a'.repeat(43), code_challenge_method: 'S256' }).toString(),
+        redirect: 'manual',
+      });
+      assert.equal(right.status, 302);
+      assert.ok(new URL(right.headers.get('location')).searchParams.get('code'), 'correct pairing code mints the authorization code');
+    } finally { gw.stop(); }
+  });
+
+  test('binding non-loopback with auth but no --approval-token is refused', async () => {
+    const child = spawn(process.execPath, [SELF, '--transport', 'http', '--host', '0.0.0.0', '--port', '0'], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+      env: { ...process.env, CONTEXT_SAVER_LOG: 'silent' },
+    });
+    const stderr = [];
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (d) => stderr.push(d));
+    const code = await new Promise((resolve) => child.on('exit', resolve));
+    assert.equal(code, 2);
+    assert.ok(stderr.join('').includes('approval'), stderr.join(''));
   });
 });

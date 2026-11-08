@@ -336,12 +336,15 @@ describe('OAuth 2.1 authorization server', () => {
     const html = await page.text();
     assert.ok(html.includes('http-test-client'));
     assert.ok(html.includes('Approve'));
+    // the browser flow submits the one-time approval token embedded in the page
+    const approvalToken = /name="approval_token" value="([^"]+)"/.exec(html)?.[1];
+    assert.ok(approvalToken, 'consent page must embed a one-time approval token');
 
     const decision = await fetch(`${gw_.base}/authorize`, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        action: 'approve', client_id: clientId, redirect_uri: redirectUri, response_type: 'code',
+        action: 'approve', approval_token: approvalToken, client_id: clientId, redirect_uri: redirectUri, response_type: 'code',
         code_challenge: challenge, code_challenge_method: 'S256', state: 'st4te', scope: 'mcp',
       }).toString(),
       redirect: 'manual',
@@ -394,17 +397,46 @@ describe('OAuth 2.1 authorization server', () => {
   });
 
   test('deny flow redirects with error=access_denied', async () => {
+    const page = await fetch(`${gw_.base}/authorize?${new URLSearchParams({
+      client_id: clientId, redirect_uri: redirectUri, response_type: 'code',
+      code_challenge: challenge, code_challenge_method: 'S256', state: 'nope',
+    })}`);
+    const approvalToken = /name="approval_token" value="([^"]+)"/.exec(await page.text())?.[1];
+    assert.ok(approvalToken);
     const deny = await fetch(`${gw_.base}/authorize`, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        action: 'deny', client_id: clientId, redirect_uri: redirectUri, response_type: 'code',
+        action: 'deny', approval_token: approvalToken, client_id: clientId, redirect_uri: redirectUri, response_type: 'code',
         code_challenge: challenge, code_challenge_method: 'S256', state: 'nope',
       }).toString(),
       redirect: 'manual',
     });
     assert.equal(deny.status, 302);
     assert.ok(deny.headers.get('location').includes('error=access_denied'));
+  });
+
+  test('an approval token is one-time: replaying the decision POST is rejected', async () => {
+    const page = await fetch(`${gw_.base}/authorize?${new URLSearchParams({
+      client_id: clientId, redirect_uri: redirectUri, response_type: 'code',
+      code_challenge: challenge, code_challenge_method: 'S256',
+    })}`);
+    const approvalToken = /name="approval_token" value="([^"]+)"/.exec(await page.text())?.[1];
+    const post = (extra) => fetch(`${gw_.base}/authorize`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        action: 'approve', approval_token: approvalToken, client_id: clientId, redirect_uri: redirectUri, response_type: 'code',
+        code_challenge: challenge, code_challenge_method: 'S256',
+        ...extra,
+      }).toString(),
+      redirect: 'manual',
+    });
+    const first = await post();
+    assert.equal(first.status, 302);
+    await first.arrayBuffer().catch(() => {});
+    const replay = await post();
+    assert.equal(replay.status, 400, 'the approval token must be consumed by the first decision');
   });
 
   test('authorized /mcp access: initialize + full tool round trip', async () => {

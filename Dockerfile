@@ -19,5 +19,10 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 
 # HTTP + OAuth on by default; mount your config at /root/.context-saver/config.json
 # or pass -e CONTEXT_SAVER_CONFIG=/app/config.json -v ./config.json:/app/config.json:ro
+#
+# The bind is non-loopback, so the OAuth consent page demands a pairing code:
+#   docker run -e CONTEXT_SAVER_APPROVAL_TOKEN=<secret-you-type-into-the-popup> ...
+# Without it the gateway refuses to start (fail closed) — a consent page alone
+# does not prove a human approved; scripts can POST approvals directly.
 ENTRYPOINT ["node", "/app/context-saver.mjs"]
 CMD ["--transport", "http", "--host", "0.0.0.0", "--port", "3270", "--auth"]
