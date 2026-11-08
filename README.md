@@ -21,7 +21,7 @@ and hallucinated workflows follow. It is the top complaint in every "MCP is
 eating my context window" thread.
 
 Context-Saver flips the arrangement. Your client connects to **one**
-gateway whose fixed footprint is **6 meta-tools (2,714 bytes ≈ 679 tokens)**.
+gateway whose fixed footprint is **6 meta-tools (2,704 bytes ≈ 676 tokens)**.
 The tools from every downstream server — filesystem, GitHub, Postgres, your
 scrapers — enter the context **only for the turns that need them**, then
 leave.
@@ -154,7 +154,7 @@ definitions loaded *for that task*.
 
 ¹ *measured live by `cs_status` — reproduce with
 `npx context-saver-mcp --demo --client`, then `/status`. The fixed floor is
-2,714 bytes ≈ 679 tokens for all 6 meta-tools, enforced by a test that fails
+2,704 bytes ≈ 676 tokens for all 6 meta-tools, enforced by a test that fails
 if the payload exceeds 6 kB.*
 ² *projections computed with the same formula at ~150 tok/tool, the median
 size of popular community MCP servers — an estimate, not a benchmark.*
