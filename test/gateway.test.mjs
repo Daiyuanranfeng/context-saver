@@ -2,6 +2,7 @@
 // downstream servers spawned as child processes.
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync , realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -378,6 +379,13 @@ describe('catalog cache across restarts', () => {
       assert.equal(fs.state, 'connected', 'changed spec must invalidate the cache entry');
     } finally { third.close(); }
   });
+});
+
+test('doctor verifies that discovery survives a gateway restart via the disk cache', () => {
+  const output = execFileSync(process.execPath, [SELF, '--doctor'], {
+    encoding: 'utf8', timeout: 30_000, env: { ...process.env, NO_COLOR: '1' },
+  });
+  assert.match(output, /✔ catalog cache across restarts .*16 tools.*without reconnecting/);
 });
 
 describe('zombie prevention', () => {

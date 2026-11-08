@@ -3572,6 +3572,38 @@ async function runDoctor({ configPath } = {}) {
   });
   client.close();
 
+  await check('catalog cache across restarts', async () => {
+    const config = buildDemoConfigFile();
+    const cacheDir = mkdtempSync(path.join(tmpdir(), 'context-saver-doctor-cache-'));
+    try {
+      for (const warm of [false, true]) {
+        const gateway = SimpleMcpClient.spawn(['--config', config, '--cache-dir', cacheDir], {
+          env: { CONTEXT_SAVER_CATALOG_TTL_MS: '3600000' },
+        });
+        try {
+          await gateway.initialize('doctor-cache');
+          const discovery = await gateway.request('tools/call', { name: 'cs_discover', arguments: {} });
+          const text = discovery.result?.content?.[0]?.text || '';
+          if (!text.includes('16 tool(s) across 3 server(s)')) throw new Error('demo catalog is incomplete');
+          if (warm) {
+            if (!text.includes('catalog from disk cache')) throw new Error('restarted gateway did not use the disk cache');
+            const status = await gateway.request('tools/call', { name: 'cs_status', arguments: {} });
+            const servers = status.result?.structuredContent?.servers;
+            if (servers?.length !== 3 || servers.some((server) => server.state !== 'disconnected')) {
+              throw new Error('cached discovery connected to a downstream server');
+            }
+          }
+        } finally {
+          gateway.close();
+        }
+      }
+      return '16 tools discovered from disk cache without reconnecting';
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true });
+      rmSync(config, { force: true });
+    }
+  });
+
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${SERVER_TITLE} v${VERSION} — doctor\n${paint('dim', '='.repeat(52))}`);
   for (const r of results) {
