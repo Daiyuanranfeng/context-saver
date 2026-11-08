@@ -20,11 +20,10 @@ the task needs them or not. Half the tools are barely visible to the model,
 and hallucinated workflows follow. It is the top complaint in every "MCP is
 eating my context window" thread.
 
-Context-Saver flips the arrangement. Your client connects to **one**
+Context-Saver flips the arrangement. Your client connects to one
 gateway whose fixed footprint is **6 meta-tools (2,704 bytes ≈ 676 tokens)**.
 The tools from every downstream server — filesystem, GitHub, Postgres, your
-scrapers — enter the context **only for the turns that need them**, then
-leave.
+scrapers — enter the context only for the turns that need them, then leave.
 
 ## Sixty seconds to running
 
@@ -36,8 +35,14 @@ mkdir -p ~/.context-saver
 cat > ~/.context-saver/config.json <<'EOF'
 {
   "mcpServers": {
-    "filesystem": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "~/projects"] },
-    "github":     { "url": "https://api.githubcopilot.com/mcp/", "headers": { "Authorization": "Bearer ${GITHUB_TOKEN}" } }
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "~/projects"]
+    },
+    "github": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": { "Authorization": "Bearer ${GITHUB_TOKEN}" }
+    }
   }
 }
 EOF
