@@ -3,12 +3,12 @@
   "name": "npm/context-saver-mcp",
   "title": "Context-Saver — MCP Gateway & Multiplexer",
   "description": "Connect once, load tools on demand. A single-file, zero-dependency MCP gateway that aggregates dozens of downstream MCP servers while cutting context-window usage by ~90% through lazy tool-schema loading.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "context-saver-mcp",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "transport": {
         "type": "stdio"
       }

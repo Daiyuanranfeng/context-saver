@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] — 2026-11-08
+
+### Fixed
+
+- Throwaway `--demo` configs are deleted eagerly after parsing instead of in an
+  `exit` hook — Windows hard-kills (`TerminateProcess`) never run exit handlers,
+  so every `--demo` gateway leaked one `context-saver-demo-*.json` file into the
+  OS tmpdir (caught by the windows-latest CI legs: `11 -> 12` files).
+- The CI single-file package gate no longer uses GNU-only `wc -l` semantics —
+  BSD/macOS `wc` pads its output with spaces, failing the macOS leg on a
+  perfectly fine tarball. The exact-string comparison that replaced it already
+  rejects zero, multiple, or wrongly named `.mjs` entries.
+- Repository URLs in `package.json`, `CONTRIBUTING`, `SECURITY`, README badges
+  and `.github` templates now point at `renniyy/context-saver`.
+
+### Changed
+
+- GitHub Actions bumped to current majors — `checkout@v7`, `setup-node@v7`,
+  `download-artifact@v8`, `stale@v11`, `github-script@v9` — clearing the
+  Node.js 20 deprecation warnings on hosted runners (supersedes Dependabot
+  PRs #1–#5).
+
+[1.0.1]: https://github.com/renniyy/context-saver/releases/tag/v1.0.1
+
 ## [1.0.0] — 2026-11-08
 
 ### Added

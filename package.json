@@ -1,6 +1,6 @@
 {
   "name": "context-saver-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Context-Saver \u2014 the token-saving MCP gateway. One connection, every tool, ~90% less context. Lazy-loads downstream MCP server schemas only when a turn needs them.",
   "type": "module",
   "bin": {
