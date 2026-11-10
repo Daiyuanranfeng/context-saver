@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - End-to-end tests for HTTP origin allowlisting and the public URL advertised
   in OAuth discovery metadata.
+- The doctor verifies that a restarted gateway can discover tools from its
+  disk cache without connecting to downstream servers.
+
+### Fixed
+
+- Cancelling a routed tool call aborts its downstream HTTP request and
+  discards late stdio replies.
 
 ## [1.0.2] — 2026-11-08
 

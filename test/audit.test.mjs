@@ -9,6 +9,7 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
+import { createServer } from 'node:http';
 import * as CS from '../context-saver.mjs';
 
 const SELF = realpathSync(fileURLToPath(new URL('../context-saver.mjs', import.meta.url)));
@@ -139,6 +140,109 @@ describe('audit: defenses verified', () => {
 
 // ---------------------------------------------------------------- fix 1
 describe('audit: fix 1 — cancellation hygiene', () => {
+  for (const stream of [false, true]) {
+    test(`cancellation aborts a downstream ${stream ? 'SSE body' : 'HTTP request'}`, { timeout: 8_000 }, async () => {
+      let start;
+      let stop;
+      let cancel;
+      const started = new Promise((resolve) => { start = resolve; });
+      const stopped = new Promise((resolve) => { stop = resolve; });
+      const cancelled = new Promise((resolve) => { cancel = resolve; });
+      let streamRequestId;
+      const server = createServer(async (req, res) => {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const msg = JSON.parse(Buffer.concat(chunks));
+        if (msg.method === 'notifications/cancelled') cancel(msg.params.requestId);
+        if (msg.id === undefined) { res.writeHead(202).end(); return; }
+        if (msg.id === 'sse-ready') {
+          res.writeHead(202).end();
+          start(streamRequestId);
+          return;
+        }
+        if (msg.method === 'tools/call' && msg.params.arguments.slow) {
+          res.once('close', stop);
+          if (stream) {
+            res.writeHead(200, { 'content-type': 'text/event-stream' });
+            streamRequestId = msg.id;
+            res.write('data: {"jsonrpc":"2.0","id":"sse-ready","method":"ping"}\n\n');
+          } else {
+            start(msg.id);
+          }
+          return;
+        }
+        const result = msg.method === 'initialize'
+          ? { protocolVersion: CS.LATEST_PROTOCOL_VERSION, capabilities: { tools: {} } }
+          : msg.method === 'tools/list'
+            ? { tools: [{ name: 'slow', inputSchema: { type: 'object' } }] }
+            : { content: [{ type: 'text', text: 'completed' }] };
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(CS.rpcResponse(msg.id, result)));
+      });
+      await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const manager = new CS.DownstreamManager({
+        useCache: false,
+        servers: { remote: { name: 'remote', type: 'http', url: `http://127.0.0.1:${server.address().port}/mcp` } },
+      });
+      try {
+        const engine = new CS.GatewayEngine({ manager });
+        const session = engine.createSession();
+        const request = (slow) => ({
+          jsonrpc: '2.0', id: 'upstream-id', method: 'tools/call',
+          params: { name: 'cs_call', arguments: { tool: 'remote__slow', args: { slow } } },
+        });
+        const pending = engine.handleRequest(request(true), session);
+        const downstreamId = await started;
+        engine.handleNotification({
+          jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 'upstream-id' },
+        }, session);
+        const observed = await Promise.race([
+          Promise.all([stopped, cancelled]).then(([, id]) => id),
+          sleep(2_000).then(() => 'not cancelled'),
+        ]);
+        assert.equal(observed, downstreamId);
+        assert.equal((await pending).wasCancelled, true);
+        assert.equal(textOf((await engine.handleRequest(request(false), session)).reply), 'completed');
+      } finally {
+        manager.shutdown();
+        server.closeAllConnections();
+        server.close();
+      }
+    });
+  }
+
+
+  test('cancellation drops the pending stdio reply and keeps the child usable', { timeout: 8_000 }, async () => {
+    const manager = new CS.DownstreamManager({
+      useCache: false,
+      servers: {
+        chaos: { name: 'chaos', type: 'stdio', command: process.execPath, args: [SELF, '--demo-server', 'demo-chaos'] },
+      },
+    });
+    try {
+      const conn = await manager.ensureConnected('chaos');
+      const engine = new CS.GatewayEngine({ manager });
+      const session = engine.createSession();
+      const request = (tool, args) => ({
+        jsonrpc: '2.0', id: 42, method: 'tools/call',
+        params: { name: 'cs_call', arguments: { tool: 'chaos__' + tool, args } },
+      });
+      const pending = engine.handleRequest(request('slow', { seconds: 2 }), session);
+      for (let i = 0; i < 200 && conn.inflight === 0; i++) await sleep(5);
+      assert.equal(conn.inflight, 1);
+      engine.handleNotification({
+        jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 42 },
+      }, session);
+      assert.equal(conn.inflight, 0);
+      assert.equal((await pending).wasCancelled, true);
+      const next = await engine.handleRequest(request('echo', { message: 'still here' }), session);
+      assert.match(textOf(next.reply), /still here/);
+      assert.equal(await manager.ensureConnected('chaos'), conn);
+    } finally {
+      manager.shutdown();
+    }
+  });
+
   test('a late cancellation must not suppress a future request reusing the id', async () => {
     const client = CS.SimpleMcpClient.spawn(['--demo']);
     try {
