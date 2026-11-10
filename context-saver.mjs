@@ -494,6 +494,19 @@ function normalizeCallResult(result) {
 // [05] downstream connections
 // ---------------------------------------------------------------------------
 
+function abortPendingRequest(request, pending, id, signal) {
+  if (!signal) return request;
+  const abort = () => {
+    const entry = pending.get(id);
+    if (!entry) return;
+    pending.delete(id);
+    clearTimeout(entry.timer);
+    entry.reject(signal.reason);
+  };
+  signal.addEventListener('abort', abort, { once: true });
+  return request.finally(() => signal.removeEventListener('abort', abort));
+}
+
 /** Shared tools/list pagination + tools/call semantics for all transports. */
 class BaseDownstream {
   constructor(name, spec, { initTimeoutMs = 10_000, requestTimeoutMs = 60_000, onNotification } = {}) {
@@ -542,8 +555,8 @@ class BaseDownstream {
     return tools;
   }
 
-  async callTool(toolName, args, timeoutMs = this.requestTimeoutMs) {
-    const res = await this.request('tools/call', { name: toolName, arguments: args === undefined ? {} : args }, timeoutMs);
+  async callTool(toolName, args, timeoutMs = this.requestTimeoutMs, signal) {
+    const res = await this.request('tools/call', { name: toolName, arguments: args === undefined ? {} : args }, timeoutMs, signal);
     if (res.error) {
       throw new DownstreamRpcError(res.error.code ?? ErrorCode.INTERNAL_ERROR, res.error.message ?? 'downstream tool error', res.error.data);
     }
@@ -644,9 +657,10 @@ class StdioDownstream extends BaseDownstream {
     }
   }
 
-  request(method, params, timeoutMs = this.requestTimeoutMs) {
+  request(method, params, timeoutMs = this.requestTimeoutMs, signal) {
+    signal?.throwIfAborted();
     const id = ++this._idSeq;
-    return new Promise((resolve, reject) => {
+    const request = new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         if (this.pending.delete(id)) reject(new DownstreamTimeout(`${this.name}.${method}`, timeoutMs));
       }, timeoutMs);
@@ -654,6 +668,7 @@ class StdioDownstream extends BaseDownstream {
       this.lastUsed = Date.now();
       this._send({ jsonrpc: '2.0', id, method, ...(params !== undefined ? { params } : {}) }).catch(reject);
     });
+    return abortPendingRequest(request, this.pending, id, signal);
   }
 
   notify(method, params) {
@@ -809,8 +824,7 @@ class HttpDownstream extends BaseDownstream {
     this._rawPost(reply).catch((err) => log.debug('downstream', `"${this.name}" server-request reply failed: ${err.message}`));
   }
 
-  async _rawPost(message, timeoutMs = this.requestTimeoutMs) {
-    const controller = new AbortController();
+  async _rawPost(message, timeoutMs = this.requestTimeoutMs, controller = new AbortController()) {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const url = this.type === 'legacy-sse' ? this._legacyMessageUrl : this.url;
@@ -827,19 +841,36 @@ class HttpDownstream extends BaseDownstream {
     }
   }
 
-  async request(method, params, timeoutMs = this.requestTimeoutMs) {
+  async request(method, params, timeoutMs = this.requestTimeoutMs, signal) {
+    signal?.throwIfAborted();
     const id = ++this._idSeq;
     const message = { jsonrpc: '2.0', id, method, ...(params !== undefined ? { params } : {}) };
     this.lastUsed = Date.now();
+    const controller = new AbortController();
+    const cancel = () => {
+      controller.abort(signal.reason);
+      // A disconnected HTTP stream alone does not cancel MCP server work.
+      void this.notify('notifications/cancelled', { requestId: id });
+    };
+    signal?.addEventListener('abort', cancel, { once: true });
+    try {
+      return await this._request(message, timeoutMs, controller, signal);
+    } finally {
+      signal?.removeEventListener('abort', cancel);
+    }
+  }
 
+  async _request(message, timeoutMs, controller, signal) {
+    const { id, method } = message;
     if (this.type === 'legacy-sse') {
-      return this._legacyRequest(message, timeoutMs);
+      return this._legacyRequest(message, timeoutMs, controller, signal);
     }
 
     let res;
     try {
-      res = await this._rawPost(message, timeoutMs);
+      res = await this._rawPost(message, timeoutMs, controller);
     } catch (err) {
+      signal?.throwIfAborted();
       if (err.name === 'AbortError') throw new DownstreamTimeout(`${this.name}.${method}`, timeoutMs);
       throw new ToolCallError(`HTTP transport error talking to "${this.name}": ${err.message}`);
     }
@@ -898,14 +929,14 @@ class HttpDownstream extends BaseDownstream {
     });
   }
 
-  async _legacyRequest(message, timeoutMs) {
+  async _legacyRequest(message, timeoutMs, controller, signal) {
     this._streamPending = this._streamPending || new Map();
-    return new Promise((resolve, reject) => {
+    const request = new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         if (this._streamPending.delete(message.id)) reject(new DownstreamTimeout(`${this.name}.${message.method}`, timeoutMs));
       }, timeoutMs);
       this._streamPending.set(message.id, { resolve, reject, timer });
-      this._rawPost(message, timeoutMs).then(async (res) => {
+      this._rawPost(message, timeoutMs, controller).then(async (res) => {
         if (!res.ok) {
           if (this._streamPending.delete(message.id)) {
             clearTimeout(timer);
@@ -921,6 +952,7 @@ class HttpDownstream extends BaseDownstream {
         }
       });
     });
+    return abortPendingRequest(request, this._streamPending, message.id, signal);
   }
 
   async notify(method, params) {
@@ -1087,15 +1119,18 @@ class DownstreamManager {
     }
   }
 
-  async callTool(serverName, toolName, args) {
+  async callTool(serverName, toolName, args, signal) {
+    signal?.throwIfAborted();
     const conn = await this.ensureConnected(serverName);
+    signal?.throwIfAborted();
     const spec = this.servers[serverName];
     const timeoutMs = spec.timeoutMs ?? this.defaults.timeoutMs ?? 60_000;
     this.stats.calls += 1;
     conn.lastUsed = Date.now();
     try {
-      return await conn.callTool(toolName, args, timeoutMs);
+      return await conn.callTool(toolName, args, timeoutMs, signal);
     } catch (err) {
+      signal?.throwIfAborted();
       this.stats.callErrors += 1;
       throw mapDownstreamError(serverName, toolName, err);
     }
@@ -1357,7 +1392,7 @@ class GatewaySession {
     this.loaded = new Map(); // exposed key -> {key, server, tool, def}
     this.pendingNotifications = [];
     this.sink = null; // set by transports that can push asynchronously
-    this.cancelled = new Set();
+    this.activeRequests = new Map();
     this.negotiatedVersion = null;
     this.initialized = false;
     this.clientInfo = null;
@@ -1401,18 +1436,15 @@ class GatewayEngine {
 
   async handleRequest(msg, session) {
     session.touch();
-    // A cancellation can only legitimately target a request that is already in
-    // flight. Clearing any stale entry here prevents a LATE cancellation (one that
-    // arrived after the previous reply was written) from suppressing the reply of
-    // a future request that reuses the same id.
-    session.cancelled.delete(msg.id);
+    const controller = new AbortController();
+    session.activeRequests.set(msg.id, controller);
     let reply;
     try {
       switch (msg.method) {
         case 'initialize': reply = rpcResponse(msg.id, this._initialize(msg, session)); break;
         case 'ping': reply = rpcResponse(msg.id, {}); break;
         case 'tools/list': reply = rpcResponse(msg.id, await this._toolsList(msg, session)); break;
-        case 'tools/call': reply = rpcResponse(msg.id, await this._toolsCall(msg, session)); break;
+        case 'tools/call': reply = rpcResponse(msg.id, await this._toolsCall(msg, session, controller.signal)); break;
         case 'resources/list': reply = rpcResponse(msg.id, { resources: [] }); break;
         case 'resources/templates/list': reply = rpcResponse(msg.id, { resourceTemplates: [] }); break;
         case 'prompts/list': reply = rpcResponse(msg.id, { prompts: [] }); break;
@@ -1420,7 +1452,9 @@ class GatewayEngine {
           reply = rpcError(msg.id, ErrorCode.METHOD_NOT_FOUND, `Method not found: ${msg.method}`);
       }
     } catch (err) {
-      if (err.rpcCode === ErrorCode.INVALID_PARAMS || (err instanceof DownstreamRpcError && err.code === ErrorCode.INVALID_PARAMS)) {
+      if (controller.signal.aborted) {
+        reply = null;
+      } else if (err.rpcCode === ErrorCode.INVALID_PARAMS || (err instanceof DownstreamRpcError && err.code === ErrorCode.INVALID_PARAMS)) {
         reply = rpcError(msg.id, ErrorCode.INVALID_PARAMS, err.message, err instanceof DownstreamRpcError ? err.data : undefined);
       } else if (err instanceof ConfigError) {
         reply = rpcError(msg.id, ErrorCode.SERVER_ERROR, err.message);
@@ -1428,8 +1462,10 @@ class GatewayEngine {
         log.error('engine', `error handling ${msg.method}: ${err.stack || err.message}`);
         reply = rpcError(msg.id, ErrorCode.INTERNAL_ERROR, `internal error: ${err.message}`);
       }
+    } finally {
+      if (session.activeRequests.get(msg.id) === controller) session.activeRequests.delete(msg.id);
     }
-    return { reply, notifications: session.drainNotifications() };
+    return { reply, notifications: session.drainNotifications(), wasCancelled: controller.signal.aborted };
   }
 
   handleNotification(msg, session) {
@@ -1438,13 +1474,7 @@ class GatewayEngine {
       log.info('session', `client ${session.clientInfo?.name || session.id} confirmed initialization`);
     } else if (msg.method === 'notifications/cancelled') {
       const rid = msg.params?.requestId;
-      if (rid !== undefined) {
-        if (session.cancelled.size > 1_000) {
-          log.warn('session', 'cancellation set exceeded 1000 entries; clearing');
-          session.cancelled.clear();
-        }
-        session.cancelled.add(rid);
-      }
+      session.activeRequests.get(rid)?.abort();
       log.debug('session', `client cancelled request ${JSON.stringify(rid)}`);
     }
     // other notifications are informational; the spec says ignore unknown ones
@@ -1503,7 +1533,7 @@ class GatewayEngine {
     return result;
   }
 
-  async _toolsCall(msg, session) {
+  async _toolsCall(msg, session, signal) {
     const name = msg.params?.name;
     if (typeof name !== 'string' || name === '') throw invalidParams('tools/call requires a tool "name"');
     const args = msg.params?.arguments ?? {};
@@ -1512,21 +1542,22 @@ class GatewayEngine {
     }
 
     const meta = META_HANDLERS[name];
-    if (meta) return meta(this, session, args);
+    if (meta) return meta(this, session, args, signal);
 
     const loaded = session.loaded.get(name);
-    if (loaded) return this._callDownstream(session, loaded.server, loaded.tool, args);
+    if (loaded) return this._callDownstream(session, loaded.server, loaded.tool, args, signal);
 
     throw invalidParams(`Tool ${name} not found — call cs_discover or cs_plan, then cs_load it (or use cs_call)`);
   }
 
-  async _callDownstream(session, server, tool, args) {
+  async _callDownstream(session, server, tool, args, signal) {
     try {
-      const result = await this.manager.callTool(server, tool, args);
+      const result = await this.manager.callTool(server, tool, args, signal);
       session.stats.callsOk += 1;
       session.stats.resultTokens += estimateTokens(result);
       return result;
     } catch (err) {
+      signal?.throwIfAborted();
       session.stats.callsErr += 1;
       if (err instanceof DownstreamRpcError && err.code === ErrorCode.INVALID_PARAMS) throw err;
       const text = [err.message, err.hint ? `Hint: ${err.hint}` : null].filter(Boolean).join('\n');
@@ -1804,7 +1835,7 @@ async function hStatus(engine, session, args) {
   });
 }
 
-async function hCall(engine, session, args) {
+async function hCall(engine, session, args, signal) {
   const toolId = args.tool;
   if (typeof toolId !== 'string' || toolId === '') throw invalidParams('cs_call requires "tool": a tool id');
   const callArgs = args.args ?? {};
@@ -1814,7 +1845,7 @@ async function hCall(engine, session, args) {
 
   const loaded = session.loaded.get(toolId);
   if (loaded) {
-    return engine._callDownstream(session, loaded.server, loaded.tool, callArgs);
+    return engine._callDownstream(session, loaded.server, loaded.tool, callArgs, signal);
   }
 
   // Resolve against the catalog (exact id, then unique bare tool name).
@@ -1840,12 +1871,12 @@ async function hCall(engine, session, args) {
     const fallbackServer = parts.length >= 2 ? engine.manager.servers[parts[0]] : null;
     const fallbackEntry = fallbackServer ? catalog.get(parts[0]) : null;
     if (fallbackServer && (!fallbackEntry || fallbackEntry.tools.length === 0)) {
-      return engine._callDownstream(session, parts[0], parts.slice(1).join('__'), callArgs);
+      return engine._callDownstream(session, parts[0], parts.slice(1).join('__'), callArgs, signal);
     }
     const hint = suggestIds(toolId, catalog).join(', ');
     throw invalidParams(`unknown tool "${toolId}"${hint ? ` — did you mean: ${hint}` : ''}`);
   }
-  return engine._callDownstream(session, server, tool, callArgs);
+  return engine._callDownstream(session, server, tool, callArgs, signal);
 }
 
 const META_HANDLERS = {
@@ -1908,8 +1939,7 @@ async function runStdioGateway({ engine, manager }) {
     }
     try {
       if (isJsonRpcRequest(msg)) {
-        const { reply, notifications } = await engine.handleRequest(msg, session);
-        const wasCancelled = session.cancelled.delete(msg.id);
+        const { reply, notifications, wasCancelled } = await engine.handleRequest(msg, session);
         if (!wasCancelled) writeLine(reply);
         else log.debug('session', `skipping reply to cancelled request ${JSON.stringify(msg.id)}`);
         for (const n of notifications) writeLine(n);
@@ -2154,8 +2184,7 @@ function createGatewayHttpServer({ engine, manager, auth = null, allowedOrigins 
         return;
       }
 
-      const { reply, notifications } = await engine.handleRequest(msg, session);
-      const wasCancelled = session.cancelled.delete(msg.id);
+      const { reply, notifications, wasCancelled } = await engine.handleRequest(msg, session);
 
       if (notifications.length > 0) {
         openSse(res, { sessionId: session.id });
@@ -2262,8 +2291,7 @@ function createGatewayHttpServer({ engine, manager, auth = null, allowedOrigins 
     }
 
     if (isJsonRpcRequest(msg)) {
-      const { reply, notifications } = await engine.handleRequest(msg, session);
-      const wasCancelled = session.cancelled.delete(msg.id);
+      const { reply, notifications, wasCancelled } = await engine.handleRequest(msg, session);
       if (!wasCancelled) writeSseEvent(session.legacyRes, reply);
       for (const n of notifications) writeSseEvent(session.legacyRes, n);
     } else if (isJsonRpcNotification(msg)) {
