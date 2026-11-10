@@ -351,7 +351,9 @@ describe('audit: round 2 — fix 6 (OAuth approval needs a human)', () => {
     const base = (async () => {
       for (let i = 0; i < 200; i++) {
         await sleep(50);
-        try { return `http://127.0.0.1:${Number(readFileSync(portFile, 'utf8').trim())}`; } catch { /* not yet */ }
+        let port;
+        try { port = Number(readFileSync(portFile, 'utf8').trim()); } catch { /* not yet */ }
+        if (port) return `http://127.0.0.1:${port}`;
       }
       throw new Error('gateway did not start');
     })();
